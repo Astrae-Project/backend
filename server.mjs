@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import pool from './db.mjs'
 import bcrypt from 'bcrypt'
-import { createUser } from './models/userModel.mjs';
+import jwt from 'jsonwebtoken';
 
 dotenv.config();
 
@@ -56,6 +56,30 @@ app.post('/register', async (req, res) => {
   } catch (err) {
       console.error('Error al registrar el usuario:', err);
       res.status(500).json({ message: 'Error al registrar el usuario' });
+  }
+});
+
+app.post('/select-role/:id', async (req, res) => {
+  const userId = req.params.id;
+  const { rol } = req.body; // El rol es enviado desde el frontend (startup o inversor)
+
+  if (!rol || (rol !== 'inversor' && rol !== 'startup')) {
+    return res.status(400).json({ message: 'Selecciona un rol válido' });
+  }
+
+  try {
+    // Actualizar el rol del usuario en la base de datos
+    await pool.query('UPDATE usuarios SET rol = $1 WHERE id = $2', [rol, userId]);
+
+    // Redirigir al siguiente paso según el rol
+    if (rol === 'inversor') {
+      return res.json({ message: 'Rol seleccionado: inversor', redirectUrl: `/create-investor-profile/${userId}` });
+    } else {
+      return res.json({ message: 'Rol seleccionado: startup', redirectUrl: `/create-startup-profile/${userId}` });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error al seleccionar el rol' });
   }
 });
 
