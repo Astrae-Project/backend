@@ -52,7 +52,7 @@ app.post('/register', async (req, res) => {
       const userId = insertResult.rows[0].id;
 
       // Enviar respuesta al cliente
-      res.status(201).json({ message: 'Usuario registrado con éxito', userId });
+      res.status(201).json({ message: 'Usuario registrado con éxito', userId,  redirectUrl: `/select-role/${userId}` });
   } catch (err) {
       console.error('Error al registrar el usuario:', err);
       res.status(500).json({ message: 'Error al registrar el usuario' });
@@ -73,9 +73,9 @@ app.post('/select-role/:id', async (req, res) => {
 
     // Redirigir al siguiente paso según el rol
     if (rol === 'inversor') {
-      return res.json({ message: 'Rol seleccionado: inversor', redirectUrl: `/create-investor-profile/${userId}` });
+      return res.json({ message: 'Rol seleccionado: inversor', redirectUrl: `/crear-inversor/${userId}` });
     } else {
-      return res.json({ message: 'Rol seleccionado: startup', redirectUrl: `/create-startup-profile/${userId}` });
+      return res.json({ message: 'Rol seleccionado: startup', redirectUrl: `/crear-startup/${userId}` });
     }
   } catch (err) {
     console.error(err);
@@ -83,36 +83,66 @@ app.post('/select-role/:id', async (req, res) => {
   }
 });
 
-// Ruta para iniciar sesión
-app.post('/login', async (req, res) => {
-  const { email, contraseña } = req.body;
+// Ruta para completar el perfil de inversor
+app.post('/crear-inversor/:id', async (req, res) => {
+  const { userId } = req.body;  // Asumimos que ya tenemos el userId del registro
+
+  const { nombre_inversor, perfil_inversion } = req.body;
+
+  if (!nombre_inversor || !perfil_inversion) {
+    return res.status(400).json({ message: 'Faltan campos requeridos' });
+  }
 
   try {
-    // Buscar el usuario por email
-    const result = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
+    // Insertar el inversor en la tabla de inversores con un nuevo ID
+    const insertInversor = await pool.query(
+      'INSERT INTO inversores (id_usuario, nombre, perfil_inversion) VALUES ($1, $2, $3) RETURNING id',
+      [userId, nombre_inversor, perfil_inversion]
+    );
 
-    if (result.rows.length === 0) {
-      return res.status(400).json({ message: 'Usuario no encontrado' });
-    }
+    const inversorId = insertInversor.rows[0].id;
 
-    const user = result.rows[0];
+    // Generar el token JWT ahora que el perfil está completo
+    const token = jwt.sign({ userId, inversorId }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
-    // Verificar la contraseña
-    const isMatch = await bcrypt.compare(contraseña, user.contraseña);
-
-    if (!isMatch) {
-      return res.status(400).json({ message: 'Contraseña incorrecta' });
-    }
-
-    // Generar token JWT
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-
-    res.json({ token });
+    // Redirigir a la app con la información del perfil
+    res.status(200).json({ message: 'Inversor creado con éxito', redirectTo: 'http://localhost:3000/' });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: 'Error al iniciar sesión' });
+    res.status(500).json({ message: 'Error al completar el perfil del inversor' });
   }
-}
+});
+
+// Ruta para iniciar sesión
+  app.post('/login', async (req, res) => {
+    const { email, contraseña } = req.body;
+
+    try {
+      // Buscar el usuario por email
+      const result = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
+
+      if (result.rows.length === 0) {
+        return res.status(400).json({ message: 'Usuario no encontrado' });
+      }
+
+      const user = result.rows[0];
+
+      // Verificar la contraseña
+      const isMatch = await bcrypt.compare(contraseña, user.contraseña);
+
+      if (!isMatch) {
+        return res.status(400).json({ message: 'Contraseña incorrecta' });
+      }
+
+      // Generar token JWT
+      const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+      res.json({ token });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Error al iniciar sesión' });
+    }
+  }
 );
 
 // Ruta principal
