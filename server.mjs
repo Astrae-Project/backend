@@ -17,23 +17,54 @@ app.use(cors({
 }));
 app.use(express.json()); // Parsear JSON
 
-// Ruta para registrar un usuario
-// Ruta para registrar un usuario
-app.post('/register', async (req, res) => {
+// Ruta de registro
+app.post('/registrar', async (req, res) => {
   const { email, contraseña } = req.body;
 
-  // Validar que se haya enviado el email y la contraseña
-  if (!email || !contraseña) {
-      return res.status(400).json({ message: 'Por favor, envía email y contraseña' });
-  }
-
   try {
-      // Verificar si el usuario ya existe
-      const existingUserResult = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
+    // Verificar si el usuario ya existe
+    const existingUser = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
 
-      if (existingUserResult.rows.length > 0) {
-          return res.status(400).json({ message: 'El usuario ya existe' });
+    if (existingUser.rows.length > 0) {
+      const user = existingUser.rows[0];
+
+      // Si no ha seleccionado un rol
+      if (!user.rol) {
+        return res.status(200).json({
+          message: 'El usuario ya está registrado, pero no ha seleccionado un rol',
+          redirectUrl: `/seleccionar-rol/${user.id}`
+        });
       }
+
+      // Si ha seleccionado un rol, verificar si ha completado su perfil según el rol
+      if (user.rol === 'inversor') {
+        const inversor = await pool.query('SELECT * FROM inversores WHERE id_usuario = $1', [user.id]);
+
+        if (inversor.rows.length === 0) {
+          // Si no ha completado el perfil de inversor
+          return res.status(200).json({
+            message: 'El usuario es inversor, pero no ha completado su perfil',
+            redirectUrl: `/crear-inversor/${user.id}`
+          });
+        }
+      } else if (user.rol === 'startup') {
+        const startup = await pool.query('SELECT * FROM startups WHERE id_usuario = $1', [user.id]);
+
+        if (startup.rows.length === 0) {
+          // Si no ha completado el perfil de startup
+          return res.status(200).json({
+            message: 'El usuario es startup, pero no ha completado su perfil',
+            redirectUrl: `/crear-startup/${user.id}`
+          });
+        }
+      }
+
+      // Si ya ha completado su perfil, devolver un error o redirigirlo a la app principal
+      return res.status(400).json({
+        message: 'El usuario ya completó su registro',
+        redirectUrl: `/app/${user.id}`
+      });
+    }
 
       // Encriptar la contraseña
       const hashedPassword = await bcrypt.hash(contraseña, 10);
@@ -52,22 +83,30 @@ app.post('/register', async (req, res) => {
       const userId = insertResult.rows[0].id;
 
       // Enviar respuesta al cliente
-      res.status(201).json({ message: 'Usuario registrado con éxito', userId,  redirectUrl: `/select-role/${userId}` });
+      res.status(201).json({ message: 'Usuario registrado con éxito', userId,  redirectUrl: `/seleccionar-rol/${userId}` });
   } catch (err) {
       console.error('Error al registrar el usuario:', err);
       res.status(500).json({ message: 'Error al registrar el usuario' });
   }
 });
 
-app.post('/select-role/:id', async (req, res) => {
+app.post('/seleccionar-rol/:id', async (req, res) => {
   const userId = req.params.id;
   const { rol } = req.body; // El rol es enviado desde el frontend (startup o inversor)
 
+  // Validar que se ha enviado un rol válido
   if (!rol || (rol !== 'inversor' && rol !== 'startup')) {
     return res.status(400).json({ message: 'Selecciona un rol válido' });
   }
 
   try {
+    // Verificar si el usuario existe en la base de datos
+    const userResult = await pool.query('SELECT * FROM usuarios WHERE id = $1', [userId]);
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
     // Actualizar el rol del usuario en la base de datos
     await pool.query('UPDATE usuarios SET rol = $1 WHERE id = $2', [rol, userId]);
 
@@ -78,26 +117,41 @@ app.post('/select-role/:id', async (req, res) => {
       return res.json({ message: 'Rol seleccionado: startup', redirectUrl: `/crear-startup/${userId}` });
     }
   } catch (err) {
-    console.error(err);
+    console.error('Error al seleccionar el rol:', err);
     res.status(500).json({ message: 'Error al seleccionar el rol' });
   }
 });
 
+
 // Ruta para completar el perfil de inversor
 app.post('/crear-inversor/:id', async (req, res) => {
-  const { userId } = req.body;  // Asumimos que ya tenemos el userId del registro
+  const userId = req.params.id;  // Usamos el userId que se pasó en la URL
 
-  const { nombre_inversor, perfil_inversion } = req.body;
+  const { nombre, perfil_inversion } = req.body;
 
-  if (!nombre_inversor || !perfil_inversion) {
+  if (!nombre || !perfil_inversion) {
     return res.status(400).json({ message: 'Faltan campos requeridos' });
   }
 
   try {
+
+    // Verificar si el usuario existe en la base de datos
+    const userResult = await pool.query('SELECT * FROM usuarios WHERE id = $1', [userId]);
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    const inversorExistente = await pool.query('SELECT * FROM inversores WHERE id_usuario = $1', [userId]);
+
+    if (inversorExistente.rows.length > 0) {
+      return res.status(400).json({ message: 'Ya existe un perfil de inversor para este usuario' });
+    }
+
     // Insertar el inversor en la tabla de inversores con un nuevo ID
     const insertInversor = await pool.query(
       'INSERT INTO inversores (id_usuario, nombre, perfil_inversion) VALUES ($1, $2, $3) RETURNING id',
-      [userId, nombre_inversor, perfil_inversion]
+      [userId, nombre, perfil_inversion]
     );
 
     const inversorId = insertInversor.rows[0].id;
@@ -113,8 +167,52 @@ app.post('/crear-inversor/:id', async (req, res) => {
   }
 });
 
+// Ruta para completar el perfil de startup
+app.post('/crear-startup/:id', async (req, res) => {
+  const userId = req.params.id;  // Usamos el userId que se pasó en la URL
+
+  const { nombre_startup, sector, fase_desarrollo, estado_financiacion, website, plantilla } = req.body;
+
+  if (!nombre_startup || !sector || !fase_desarrollo || !estado_financiacion || !plantilla) {
+    return res.status(400).json({ message: 'Faltan campos requeridos' });
+  }
+
+  try {
+
+    // Verificar si el usuario existe en la base de datos
+    const userResult = await pool.query('SELECT * FROM usuarios WHERE id = $1', [userId]);
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    const startupExistente = await pool.query('SELECT * FROM startups WHERE id_usuario = $1', [userId]);
+
+    if (startupExistente.rows.length > 0) {
+      return res.status(400).json({ message: 'Ya existe un perfil de startup para este usuario' });
+    }
+
+    // Insertar el inversor en la tabla de inversores con un nuevo ID
+    const insertStartup = await pool.query(
+      'INSERT INTO startups (id_usuario, nombre, sector, fase_desarrollo, estado_financiacion, website, plantilla) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+      [userId, nombre_startup, sector, fase_desarrollo, estado_financiacion, website, plantilla]
+    );
+
+    const startupId = insertStartup.rows[0].id;
+
+    // Generar el token JWT ahora que el perfil está completo
+    const token = jwt.sign({ userId, startupId }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+    // Redirigir a la app con la información del perfil
+    res.status(200).json({ message: 'Startup creada con éxito', redirectTo: 'http://localhost:3000/' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error al completar el perfil del inversor' });
+  }
+});
+
 // Ruta para iniciar sesión
-  app.post('/login', async (req, res) => {
+  app.post('/iniciar-sesion', async (req, res) => {
     const { email, contraseña } = req.body;
 
     try {
