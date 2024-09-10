@@ -4,7 +4,6 @@ import cors from 'cors';
 import authRoutes from './routes/auth.mjs';
 import profileRoutes from './routes/profileRoutes.js';
 import pool from './db.mjs';
-import jwt from 'jsonwebtoken';
 
 dotenv.config();
 
@@ -25,22 +24,6 @@ app.use('/api/profile', profileRoutes);
 // Ruta principal
 app.get('/', (req, res) => {
   res.send('Backend funcionando');
-});
-
-// Middleware para verificar el token
-app.use((req, res, next) => {
-  const token = req.headers['authorization'];
-  if (token) {
-    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-      if (err) {
-        return res.status(401).json({ message: 'Token inválido' });
-      }
-      req.user = decoded;
-      next();
-    });
-  } else {
-    res.status(403).json({ message: 'No se proporcionó un token' });
-  }
 });
 
 // Iniciar el servidor
