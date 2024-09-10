@@ -1,43 +1,38 @@
+import pool from '../db.mjs';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import pool from '../db.mjs';
+import comparePassword from "../lib/passwordUtils.js"
+
 
 export const registerUser = async (req, res) => {
-  const { email, password } = req.body;
+  const { email, contraseña } = req.body;
 
-  // Validar que se haya enviado el email y la contraseña
-  if (!email || !password) {
+  if (!email || !contraseña) {
     return res.status(400).json({ message: 'Por favor, envía email y contraseña' });
   }
 
   try {
-    // Verificar si el usuario ya existe
     const existingUser = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
-
     if (existingUser.rows.length > 0) {
       return res.status(400).json({ message: 'El usuario ya existe' });
     }
 
-    // Encriptar la contraseña
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Insertar el nuevo usuario en la base de datos
+    const hashedPassword = await bcrypt.hash(contraseña, 10);
     const result = await pool.query(
-      'INSERT INTO usuarios (email, password) VALUES ($1, $2) RETURNING id',
+      'INSERT INTO usuarios (email, contraseña) VALUES ($1, $2) RETURNING id',
       [email, hashedPassword]
     );
 
-    // Enviar respuesta al cliente
-    res.status(201).json({ message: 'Usuario registrado con éxito', userId: result.rows[0].id });
+    const userId = result.rows[0].id;
+    res.status(201).json({ message: 'Usuario registrado con éxito', userId, redirectUrl: `/seleccionar-rol/${userId}` });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Error al registrar el usuario' });
   }
 };
 
-
 export const loginUser = async (req, res) => {
-  const { email, password } = req.body;
+  const { email, contraseña } = req.body;
 
   try {
     // Buscar el usuario por email
@@ -50,7 +45,7 @@ export const loginUser = async (req, res) => {
     const user = result.rows[0];
 
     // Verificar la contraseña
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await comparePassword(contraseña, user.contraseña);
 
     if (!isMatch) {
       return res.status(400).json({ message: 'Contraseña incorrecta' });
@@ -61,7 +56,7 @@ export const loginUser = async (req, res) => {
 
     res.json({ token });
   } catch (err) {
-    console.error(err);
+    console.error('Error al iniciar sesión:', err);
     res.status(500).json({ message: 'Error al iniciar sesión' });
   }
 };
