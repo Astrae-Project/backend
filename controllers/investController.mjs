@@ -1,161 +1,204 @@
+import prisma from '../lib/prismaClient.mjs';
 
+// Función para hacer una oferta
 export const investorOffer = async (req, res) => {
-    const { id_inversor, id_startup, monto, porcentaje } = req.body;
-  
-    try {
-      // Crear el PaymentIntent con captura manual
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: monto * 100, // En centavos
-        currency: 'usd',
-        payment_method_types: ['card'],
-        capture_method: 'manual', // Retener el pago
-      });
-  
-      // Guardar la oferta en la base de datos
-      const nuevaOferta = await oferta.create({
-        id_inversor,
+  const { id_startup, monto_ofrecido, porcentaje_ofrecido } = req.body;
+  const { userId } = req.user;
+
+  if (!id_startup || !monto_ofrecido || !porcentaje_ofrecido) {
+    return res.status(400).json({ message: 'Faltan campos requeridos' });
+  }
+
+  try {
+    const startup = await prisma.startup.findUnique({
+      where: { id: id_startup },
+    });
+
+    if (!startup) {
+      return res.status(404).json({ message: 'Startup no encontrada' });
+    }
+
+    const oferta = await prisma.oferta.create({
+      data: {
+        id_inversor: userId,
         id_startup,
-        monto_ofrecido: monto,
-        porcentaje_ofrecido: porcentaje,
-        payment_intent_id: paymentIntent.id,
-        estado: 'en espera',
-      });
-  
-      res.status(201).json({ message: 'Oferta creada y pago retenido', oferta: nuevaOferta });
-    } catch (error) {
-      console.error('Error creando oferta:', error);
-      res.status(500).send('Error al crear la oferta');
-    }
-  };
+        monto_ofrecido,
+        porcentaje_ofrecido,
+        estado: 'pendiente',
+      },
+    });
 
-  // Aceptar oferta
-export const offerAccepted = async (req, res) => {
-    const { id } = req.params;
-    const oferta = await oferta.findById(id);
-  
-    if (!oferta || oferta.estado !== 'en espera') {
-      return res.status(404).json({ message: 'Oferta no válida' });
-    }
-  
-    try {
-      // Capturar el pago
-      await stripe.paymentIntents.capture(oferta.payment_intent_id);
-  
-      oferta.estado = 'aceptada';
-      await oferta.save();
-  
-      // Actualizar el portafolio del inversor
-      await portfolios.create({
-        id_inversor: oferta.id_inversor,
-        monto_invertido: oferta.monto_ofrecido,
-        id_startup: oferta.id_startup,
-        porcentaje_adquirido: oferta.porcentaje_ofrecido,
-      });
-  
-      res.status(200).json({ message: 'Oferta aceptada y pago completado' });
-    } catch (error) {
-      console.error('Error al aceptar la oferta:', error);
-      res.status(500).send('Error al capturar el pago');
-    }
-  };
-  
-  // Rechazar oferta
-  export const offerRejected = async (req, res) => {
-    const { id } = req.params;
-    const oferta = await oferta.findById(id);
-  
-    if (!oferta || oferta.estado !== 'en espera') {
-      return res.status(404).json({ message: 'Oferta no válida' });
-    }
-  
-    try {
-      // Cancelar el PaymentIntent
-      await stripe.paymentIntents.cancel(oferta.payment_intent_id);
-  
-      oferta.estado = 'rechazada';
-      await oferta.save();
-  
-      res.status(200).json({ message: 'Oferta rechazada y pago devuelto' });
-    } catch (error) {
-      console.error('Error al rechazar la oferta:', error);
-      res.status(500).send('Error al cancelar el pago');
-    }
-  };
-  
-  // Contraoferta
-  export const counteroffer = async (req, res) => {
-    const { id } = req.params;
-    const { nuevoMonto, nuevoPorcentaje } = req.body;
-    const oferta = await Oferta.findById(id);
-  
-    if (!oferta || oferta.estado !== 'en espera') {
-      return res.status(404).json({ message: 'Oferta no válida' });
-    }
-  
-    try {
-      oferta.monto_ofrecido = nuevoMonto;
-      oferta.porcentaje_ofrecido = nuevoPorcentaje;
-      oferta.estado = 'contraoferta';
-      await oferta.save();
-  
-      res.status(200).json({ message: 'Contraoferta enviada al inversor', oferta });
-    } catch (error) {
-      console.error('Error al enviar contraoferta:', error);
-      res.status(500).send('Error al realizar la contraoferta');
-    }
-  };
-
-  // Aceptar contraoferta
-  export const acceptCounteroffer = async (req, res) => {
-    const { id } = req.params;
-    const oferta = await Oferta.findById(id);
-  
-    if (!oferta || oferta.estado !== 'contraoferta') {
-      return res.status(404).json({ message: 'Contraoferta no válida' });
-    }
-  
-    try {
-      // Capturar el pago
-      await stripe.paymentIntents.capture(oferta.payment_intent_id);
-  
-      oferta.estado = 'aceptada';
-      await oferta.save();
-  
-      // Actualizar el portafolio del inversor
-      await portfolios.create({
-        id_inversor: oferta.id_inversor,
-        monto_invertido: oferta.monto_ofrecido,
-        id_startup: oferta.id_startup,
-        porcentaje_adquirido: oferta.porcentaje_ofrecido,
-      });
-  
-      res.status(200).json({ message: 'Contraoferta aceptada y pago completado' });
-    } catch (error) {
-      console.error('Error al aceptar la contraoferta:', error);
-      res.status(500).send('Error al capturar el pago');
-    }
-  };
-  
-  // Rechazar contraoferta
-  export const rejectCounteroffer = async (req, res) => {
-    const { id } = req.params;
-    const oferta = await Oferta.findById(id);
-  
-    if (!oferta || oferta.estado !== 'contraoferta') {
-      return res.status(404).json({ message: 'Contraoferta no válida' });
-    }
-  
-    try {
-      // Cancelar el PaymentIntent
-      await stripe.paymentIntents.cancel(oferta.payment_intent_id);
-  
-      oferta.estado = 'rechazada';
-      await oferta.save();
-  
-      res.status(200).json({ message: 'Contraoferta rechazada y pago devuelto' });
-    } catch (error) {
-      console.error('Error al rechazar la contraoferta:', error);
-      res.status(500).send('Error al cancelar el pago');
-    }
+    res.status(201).json({ message: 'Oferta enviada con éxito', oferta });
+  } catch (err) {
+    console.error('Error al enviar la oferta:', err);
+    res.status(500).json({ message: 'Error al enviar la oferta' });
+  }
 };
-  
+
+// Función para aceptar una oferta
+export const offerAccepted = async (req, res) => {
+  const ofertaId = parseInt(req.params.id);
+  const { userId } = req.user;
+
+  try {
+    const oferta = await prisma.oferta.findUnique({
+      where: { id: ofertaId },
+      include: { startup: true },
+    });
+
+    if (!oferta) {
+      return res.status(404).json({ message: 'Oferta no encontrada' });
+    }
+
+    if (oferta.startup.id_usuario !== userId) {
+      return res.status(403).json({ message: 'No tienes permiso para aceptar esta oferta' });
+    }
+
+    await prisma.oferta.update({
+      where: { id: ofertaId },
+      data: { estado: 'aceptada' },
+    });
+
+    // Aquí deberías redirigir o responder con una URL adecuada
+    res.status(200).json({ message: 'Oferta aceptada con éxito' });
+  } catch (err) {
+    console.error('Error al aceptar la oferta:', err);
+    res.status(500).json({ message: 'Error al aceptar la oferta' });
+  }
+};
+
+// Función para rechazar una oferta
+export const offerRejected = async (req, res) => {
+  const ofertaId = parseInt(req.params.id);
+  const { userId } = req.user;
+
+  try {
+    const oferta = await prisma.oferta.findUnique({
+      where: { id: ofertaId },
+      include: { startup: true },
+    });
+
+    if (!oferta) {
+      return res.status(404).json({ message: 'Oferta no encontrada' });
+    }
+
+    if (oferta.startup.id_usuario !== userId) {
+      return res.status(403).json({ message: 'No tienes permiso para rechazar esta oferta' });
+    }
+
+    await prisma.oferta.update({
+      where: { id: ofertaId },
+      data: { estado: 'rechazada' },
+    });
+
+    // Aquí deberías redirigir o responder con una URL adecuada
+    res.status(200).json({ message: 'Oferta rechazada con éxito' });
+  } catch (err) {
+    console.error('Error al rechazar la oferta:', err);
+    res.status(500).json({ message: 'Error al rechazar la oferta' });
+  }
+};
+
+// Función para hacer una contraoferta
+export const counteroffer = async (req, res) => {
+  const ofertaId = parseInt(req.params.id);
+  const { monto_ofrecido, porcentaje_ofrecido } = req.body;
+  const { userId } = req.user;
+
+  if (!monto_ofrecido || !porcentaje_ofrecido) {
+    return res.status(400).json({ message: 'Faltan campos requeridos' });
+  }
+
+  try {
+    const oferta = await prisma.oferta.findUnique({
+      where: { id: ofertaId },
+    });
+
+    if (!oferta) {
+      return res.status(404).json({ message: 'Oferta no encontrada' });
+    }
+
+    if (oferta.id_inversor !== userId) {
+      return res.status(403).json({ message: 'No tienes permiso para hacer una contraoferta' });
+    }
+
+    await prisma.oferta.update({
+      where: { id: ofertaId },
+      data: {
+        contraoferta_monto: monto_ofrecido,
+        contraoferta_porcentaje: porcentaje_ofrecido,
+      },
+    });
+
+    // Aquí deberías redirigir o responder con una URL adecuada
+    res.status(200).json({ message: 'Contraoferta realizada con éxito' });
+  } catch (err) {
+    console.error('Error al hacer la contraoferta:', err);
+    res.status(500).json({ message: 'Error al hacer la contraoferta' });
+  }
+};
+
+// Función para aceptar una contraoferta
+export const acceptCounteroffer = async (req, res) => {
+  const ofertaId = parseInt(req.params.id);
+  const { userId } = req.user;
+
+  try {
+    const oferta = await prisma.oferta.findUnique({
+      where: { id: ofertaId },
+    });
+
+    if (!oferta) {
+      return res.status(404).json({ message: 'Oferta no encontrada' });
+    }
+
+    if (oferta.startup.id_usuario !== userId) {
+      return res.status(403).json({ message: 'No tienes permiso para aceptar esta contraoferta' });
+    }
+
+    await prisma.oferta.update({
+      where: { id: ofertaId },
+      data: {
+        estado: 'aceptada',
+        monto_ofrecido: oferta.contraoferta_monto,
+        porcentaje_ofrecido: oferta.contraoferta_porcentaje,
+      },
+    });
+
+    // Aquí deberías redirigir o responder con una URL adecuada
+    res.status(200).json({ message: 'Contraoferta aceptada con éxito' });
+  } catch (err) {
+    console.error('Error al aceptar la contraoferta:', err);
+    res.status(500).json({ message: 'Error al aceptar la contraoferta' });
+  }
+};
+
+export const rejectCounteroffer = async (req, res) => {
+  const { id } = req.params;
+  const id_startup = req.user.userId; // ID de la startup extraído del token
+
+  try {
+    const oferta = await prisma.oferta.findUnique({
+      where: { id },
+      include: { startup: true }
+    });
+
+    if (!oferta) return res.status(404).json({ message: 'Contraoferta no encontrada' });
+    if (oferta.startup.id_usuario !== id_startup) return res.status(403).json({ message: 'No tienes permiso para rechazar esta contraoferta' });
+
+    await prisma.oferta.update({
+      where: { id },
+      data: { estado: 'rechazada' }
+    });
+
+    res.status(200).json({ message: 'Contraoferta rechazada con éxito' });
+  } catch (err) {
+    console.error('Error al rechazar la contraoferta:', err);
+    res.status(500).json({ message: 'Error al rechazar la contraoferta'})
+  };
+};
+
+
+
+
+

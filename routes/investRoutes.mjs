@@ -1,18 +1,20 @@
 import express from 'express';
 import { investorOffer, offerAccepted, offerRejected, counteroffer, acceptCounteroffer, rejectCounteroffer } from '../controllers/investController.mjs';
+import { verifyToken } from '../middlewares/tokenMiddleware.mjs';
+import { authorizeRole } from '../middlewares/authMiddleware.mjs';
 
 const router = express.Router();
 
-router.post('/inversor/oferta', investorOffer)
+router.post('/oferta/:id', verifyToken, authorizeRole('inversor'), investorOffer)
 
-router.post('/oferta/:id/aceptar', offerAccepted)
+router.post('/oferta/:id/aceptar', verifyToken, authorizeRole('startup'), offerAccepted)
 
-router.post('/oferta/:id/rechazar', offerRejected)
+router.post('/oferta/:id/rechazar', verifyToken, authorizeRole('startup'), offerRejected)
 
-router.post('/oferta/:id/aceptar', counteroffer)
+router.post('/contraoferta/:id', verifyToken, counteroffer)
 
-router.post('/oferta/:id/aceptar', acceptCounteroffer)
+router.post('/contraoferta/:id/aceptar', verifyToken, acceptCounteroffer)
 
-router.post('/oferta/:id/aceptar', rejectCounteroffer)
+router.post('/contraoferta/:id/rechazar', verifyToken, rejectCounteroffer)
 
 export default router;
