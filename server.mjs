@@ -2,13 +2,18 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import authRoutes from './routes/auth.mjs';
-import profileRoutes from './routes/profileRoutes.js';
-import pool from './db.mjs';
+import profileRoutes from './routes/profileRoutes.mjs';
+import investRoutes from './routes/investRoutes.mjs';
+import { PrismaClient } from '@prisma/client';
 
+// Configuración de variables de entorno
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 5000;
+
+// Crear instancia del cliente Prisma
+const prisma = new PrismaClient();
 
 // Middleware
 app.use(cors({
@@ -17,9 +22,10 @@ app.use(cors({
 }));
 app.use(express.json()); // Parsear JSON
 
-// Rutas
+// Rutas  
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
+app.use('/api/invest', investRoutes);
 
 // Ruta principal
 app.get('/', (req, res) => {
@@ -27,16 +33,20 @@ app.get('/', (req, res) => {
 });
 
 // Iniciar el servidor
-pool.connect()
-  .then(client => {
+const startServer = async () => {
+  try {
+    // Verificar conexión a la base de datos
+    await prisma.$connect();
     console.log('Conectado a la base de datos');
-    client.release();  // Libera el cliente de la conexión
 
     // Iniciar el servidor solo después de conectar la base de datos
     app.listen(port, () => {
       console.log(`Servidor corriendo en http://localhost:${port}`);
     });
-  })
-  .catch(err => {
+  } catch (err) {
     console.error('Error al conectar a la base de datos', err);
-  });
+    process.exit(1); // Salir del proceso con error
+  }
+};
+
+startServer();

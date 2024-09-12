@@ -7,6 +7,7 @@
         "dev": "node --watch server.mjs"
     },
     "dependencies": {
+        "@prisma/client": "^5.19.1",
         "axios": "^1.7.7",
         "bcrypt": "^5.1.1",
         "body-parser": "^1.20.2",
@@ -14,9 +15,11 @@
         "dotenv": "^16.4.5",
         "express": "^4.19.2",
         "jsonwebtoken": "^9.0.2",
-        "pg": "^8.12.0"
+        "pg": "^8.12.0",
+        "stripe": "^16.10.0"
     },
     "devDependencies": {
-        "nodemon": "^3.1.4"
+        "nodemon": "^3.1.4",
+        "prisma": "^5.19.1"
     }
 }

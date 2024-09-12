@@ -1,29 +1,37 @@
-import pool from '../db.mjs';
+import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import comparePassword from "../lib/passwordUtils.js"
 
+const prisma = new PrismaClient();
 
 export const registerUser = async (req, res) => {
-  const { email, contraseña } = req.body;
+  const { email, password } = req.body;
 
-  if (!email || !contraseña) {
+  if (!email || !password) {
     return res.status(400).json({ message: 'Por favor, envía email y contraseña' });
   }
 
   try {
-    const existingUser = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
-    if (existingUser.rows.length > 0) {
+    // Comprobar si el usuario ya existe
+    const existingUser = await prisma.usuario.findUnique({
+      where: { email }
+    });
+
+    if (existingUser) {
       return res.status(400).json({ message: 'El usuario ya existe' });
     }
 
-    const hashedPassword = await bcrypt.hash(contraseña, 10);
-    const result = await pool.query(
-      'INSERT INTO usuarios (email, contraseña) VALUES ($1, $2) RETURNING id',
-      [email, hashedPassword]
-    );
+    // Hash de la contraseña
+    const hashedPassword = await bcrypt.hash(password, 10);password
+    // Crear nuevo usuario
+    const newUser = await prisma.usuario.create({
+      data: {
+        email,
+        password: hashedPassword
+      }
+    });
 
-    const userId = result.rows[0].id;
+    const userId = newUser.id;
     res.status(201).json({ message: 'Usuario registrado con éxito', userId, redirectUrl: `/seleccionar-rol/${userId}` });
   } catch (err) {
     console.error(err);
@@ -32,20 +40,24 @@ export const registerUser = async (req, res) => {
 };
 
 export const loginUser = async (req, res) => {
-  const { email, contraseña } = req.body;
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ message: 'Por favor, envía email y contraseña' });
+  }
 
   try {
     // Buscar el usuario por email
-    const result = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
+    const user = await prisma.usuario.findUnique({
+      where: { email }
+    });
 
-    if (result.rows.length === 0) {
+    if (!user) {
       return res.status(400).json({ message: 'Usuario no encontrado' });
     }
 
-    const user = result.rows[0];
-
     // Verificar la contraseña
-    const isMatch = await comparePassword(contraseña, user.contraseña);
+    const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
       return res.status(400).json({ message: 'Contraseña incorrecta' });
