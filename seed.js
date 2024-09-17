@@ -1,4 +1,6 @@
 import prisma from './lib/prismaClient.mjs';
+import dotenv from 'dotenv';
+dotenv.config();
 
 async function seedDatabase() {
   try {

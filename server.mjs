@@ -18,7 +18,8 @@ const prisma = new PrismaClient();
 // Middleware
 app.use(cors({
   origin: 'http://localhost:4321', // Asegúrate de poner el origen correcto de tu frontend
-  methods: ['POST', 'GET']
+  methods: ['POST', 'GET'],
+  credentials: true
 }));
 app.use(express.json()); // Parsear JSON
 

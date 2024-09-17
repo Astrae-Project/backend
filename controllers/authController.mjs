@@ -22,17 +22,18 @@ export const registerUser = async (req, res) => {
     }
 
     // Hash de la contraseña
-    const hashedPassword = await bcrypt.hash(password, 10);password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     // Crear nuevo usuario
     const newUser = await prisma.usuario.create({
       data: {
         email,
-        password: hashedPassword
+        password: hashedPassword,
       }
     });
 
     const userId = newUser.id;
-    res.status(201).json({ message: 'Usuario registrado con éxito', userId, redirectUrl: `/seleccionar-rol/${userId}` });
+    res.status(201).json({ message: 'Usuario registrado con éxito', id: userId });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Error al registrar el usuario' });
@@ -42,33 +43,39 @@ export const registerUser = async (req, res) => {
 export const loginUser = async (req, res) => {
   const { email, password } = req.body;
 
+  // Validar que los campos email y password están presentes
   if (!email || !password) {
-    return res.status(400).json({ message: 'Por favor, envía email y contraseña' });
+    return res.status(400).json({ message: 'Los campos email y contraseña son obligatorios' });
   }
 
   try {
-    // Buscar el usuario por email
+    // Verificar si el usuario existe en la base de datos
     const user = await prisma.usuario.findUnique({
       where: { email }
     });
 
     if (!user) {
-      return res.status(400).json({ message: 'Usuario no encontrado' });
+      return res.status(404).json({ message: 'Usuario no encontrado' });
     }
 
-    // Verificar la contraseña
-    const isMatch = await bcrypt.compare(password, user.password);
-
-    if (!isMatch) {
-      return res.status(400).json({ message: 'Contraseña incorrecta' });
+    // Verificar si la contraseña proporcionada coincide con la almacenada (encriptada)
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: 'Contraseña incorrecta' });
     }
 
-    // Generar token JWT
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign({ userId: user.id, role: user.rol }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
-    res.json({ token });
-  } catch (err) {
-    console.error('Error al iniciar sesión:', err);
-    res.status(500).json({ message: 'Error al iniciar sesión' });
+    // Enviar token en cookies
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', // Asegura que solo en producción sea HTTPS
+      maxAge: 3600000 // 1 hora
+    });
+
+    return res.status(200).json({ message: 'Inicio de sesión exitoso', token });
+
+  } catch (error) {
+    return res.status(500).json({ message: 'Error en el servidor', error });
   }
 };

@@ -1,7 +1,7 @@
 import express from 'express';
 import { investorOffer, offerAccepted, offerRejected, counteroffer, acceptCounteroffer, rejectCounteroffer } from '../controllers/investController.mjs';
 import { verifyToken } from '../middlewares/tokenMiddleware.mjs';
-import { authorizeRole } from '../middlewares/authMiddleware.mjs';
+import { authorizeRole } from '../middlewares/rolMiddleware.mjs';
 
 const router = express.Router();
 
