@@ -1,10 +1,13 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import authRoutes from './routes/auth.mjs';
 import profileRoutes from './routes/profileRoutes.mjs';
 import investRoutes from './routes/investRoutes.mjs';
+import searchingRoutes from './routes/searchingRoutes.mjs';
 import { PrismaClient } from '@prisma/client';
+import { verifyToken } from './middlewares/tokenMiddleware.mjs';
 
 // Configuración de variables de entorno
 dotenv.config();
@@ -22,11 +25,14 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json()); // Parsear JSON
+app.use(cookieParser());
+
 
 // Rutas  
 app.use('/api/auth', authRoutes);
-app.use('/api/profile', profileRoutes);
-app.use('/api/invest', investRoutes);
+app.use('/api/profile', profileRoutes, verifyToken);
+app.use('/api/invest', investRoutes, verifyToken);
+app.use('/search', searchingRoutes, verifyToken);
 
 // Ruta principal
 app.get('/', (req, res) => {

@@ -1,5 +1,5 @@
 import express from 'express';
-import { registerUser, loginUser } from '../controllers/authController.mjs';
+import { registerUser, loginUser,loginOut } from '../controllers/authController.mjs';
 import { selectRole, investorRole, startupRole } from '../controllers/rolController.mjs';
 
 const router = express.Router();
@@ -9,6 +9,8 @@ router.post('/registrar', registerUser);
 
 // Ruta para iniciar sesión
 router.post('/iniciar-sesion', loginUser);
+
+router.post('/cerrar-sesion', loginOut);
 
 router.post('/seleccionar-rol/:id', selectRole);
 

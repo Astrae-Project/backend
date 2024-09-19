@@ -75,6 +75,13 @@ export const investorRole = async (req, res) => {
     // Generar el token JWT ahora que el perfil está completo
     const token = jwt.sign({ userId, inversorId }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
+    res.cookie('token', token, {
+      httpOnly: true, // No accesible desde JavaScript del lado del cliente
+      secure: process.env.NODE_ENV === 'production', // Solo enviar en HTTPS en producción
+      sameSite: 'Strict', // Rechazar cookies de otros sitios
+      maxAge: 3600000 // La cookie expira en 1 hora
+    });
+
     // Redirigir a la app con la información del perfil
     res.status(200).json({ message: 'Inversor creado con éxito', redirectTo: 'http://localhost:3000/', token });
   } catch (err) {
@@ -118,6 +125,14 @@ export const startupRole = async (req, res) => {
 
     // Generar el token JWT ahora que el perfil está completo
     const token = jwt.sign({ userId, startupId }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+    // Establecer la cookie
+    res.cookie('token', token, {
+      httpOnly: true, // No accesible desde JavaScript del lado del cliente
+      secure: process.env.NODE_ENV === 'production', // Solo enviar en HTTPS en producción
+      sameSite: 'Strict', // Rechazar cookies de otros sitios
+      maxAge: 3600000 // La cookie expira en 1 hora
+    });
 
     // Redirigir a la app con la información del perfil
     res.status(200).json({ message: 'Startup creada con éxito', redirectTo: 'http://localhost:3000/', token });

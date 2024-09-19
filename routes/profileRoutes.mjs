@@ -1,13 +1,12 @@
 import express from 'express';
-import { verifyToken } from '../middlewares/tokenMiddleware.mjs';
 import { getProfile, updateProfile } from '../controllers/profileController.mjs';
 
 const router = express.Router();
 
 // Ruta protegida: obtener perfil (solo accesible para usuarios autenticados)
-router.get('/perfil', verifyToken, getProfile);
+router.get('/perfil', getProfile);
 
 // Ruta protegida: actualizar perfil (solo accesible para usuarios autenticados)
-router.put('/perfil', verifyToken, updateProfile);
+router.put('/perfil', updateProfile);
 
 export default router;
