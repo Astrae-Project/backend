@@ -43,7 +43,6 @@ export const selectRole = async (req, res) => {
   }
 };
 
-import { prisma } from '../prismaClient'; // Asegúrate de que estás importando prisma correctamente
 
 export const investorRole = async (req, res) => {
   const userId = parseInt(req.params.id, 10);
@@ -70,7 +69,7 @@ export const investorRole = async (req, res) => {
         id_usuario: userId,
         nombre: nombre_inversor,
         perfil_inversion: perfil_inversion,
-        usuario: usuario // Asegúrate de que esta columna existe en la base de datos
+        username: usuario // Asegúrate de que esta columna existe en la base de datos
       }
     });
 
