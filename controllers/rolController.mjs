@@ -22,7 +22,7 @@ export const selectRole = async (req, res) => {
 
     // Verificar si ya tiene un rol asignado
     if (user.rol) {
-      return res.status(400).json({ message: 'El usuario ya tiene un rol asignado' });
+      return res.status(800).json({ message: 'El usuario ya tiene un rol asignado' });
     }
 
     // Actualizar el rol del usuario en la base de datos
@@ -43,52 +43,44 @@ export const selectRole = async (req, res) => {
   }
 };
 
-export const investorRole = async (req, res) => {
-  const userId = parseInt(req.params.id, 10); // Asegúrate de que el ID es un número
-  const { nombre_inversor, perfil_inversion } = req.body;
+import { prisma } from '../prismaClient'; // Asegúrate de que estás importando prisma correctamente
 
-  if (!nombre_inversor || !perfil_inversion) {
+export const investorRole = async (req, res) => {
+  const userId = parseInt(req.params.id, 10);
+  const { nombre_inversor, perfil_inversion, usuario } = req.body;
+
+  // Validar campos requeridos
+  if (!nombre_inversor || !perfil_inversion || !usuario) {
     return res.status(400).json({ message: 'Faltan campos requeridos' });
   }
 
   try {
-    // Verificar si el inversor ya tiene un perfil
-    const existingInversor = await prisma.inversor.findUnique({
+    // Verificar si el usuario existe
+    const user = await prisma.usuario.findUnique({
       where: { id: userId }
     });
 
-    if (existingInversor) {
-      return res.status(400).json({ message: 'El perfil de inversor ya existe para este usuario' });
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
     }
 
-    // Insertar el inversor en la base de datos
+    // Crear el inversor en la base de datos
     const newInversor = await prisma.inversor.create({
       data: {
         id_usuario: userId,
         nombre: nombre_inversor,
-        perfil_inversion: perfil_inversion
+        perfil_inversion: perfil_inversion,
+        usuario: usuario // Asegúrate de que esta columna existe en la base de datos
       }
     });
 
-    const inversorId = newInversor.id;
-
-    // Generar el token JWT ahora que el perfil está completo
-    const token = jwt.sign({ userId, inversorId }, process.env.JWT_SECRET, { expiresIn: '1h' });
-
-    res.cookie('token', token, {
-      httpOnly: true, // No accesible desde JavaScript del lado del cliente
-      secure: process.env.NODE_ENV === 'production', // Solo enviar en HTTPS en producción
-      sameSite: 'Strict', // Rechazar cookies de otros sitios
-      maxAge: 3600000 // La cookie expira en 1 hora
-    });
-
-    // Redirigir a la app con la información del perfil
-    res.status(200).json({ message: 'Inversor creado con éxito', redirectTo: 'http://localhost:3000/', token });
+    res.status(201).json({ message: 'Inversor creado con éxito', inversorId: newInversor.id });
   } catch (err) {
     console.error('Error al completar el perfil del inversor:', err);
     res.status(500).json({ message: 'Error al completar el perfil del inversor' });
   }
 };
+
 
 export const startupRole = async (req, res) => {
   const userId = parseInt(req.params.id, 10); // Asegúrate de que el ID es un número

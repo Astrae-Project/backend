@@ -8,37 +8,56 @@ export const registerUser = async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
-    return res.status(400).json({ message: 'Por favor, envía email y contraseña' });
+      console.log('Faltan datos:', { email, password });
+      return res.status(400).json({ message: 'Por favor, envía email y contraseña' });
   }
 
   try {
-    // Comprobar si el usuario ya existe
-    const existingUser = await prisma.usuario.findUnique({
-      where: { email }
-    });
+      console.log('Verificando si el usuario ya existe...');
+      const existingUser = await prisma.usuario.findUnique({
+          where: { email }
+      });
 
-    if (existingUser) {
-      return res.status(400).json({ message: 'El usuario ya existe' });
-    }
-
-    // Hash de la contraseña
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Crear nuevo usuario
-    const newUser = await prisma.usuario.create({
-      data: {
-        email,
-        password: hashedPassword,
+      if (existingUser) {
+          console.log('El usuario ya existe:', email);
+          return res.status(400).json({ message: 'El usuario ya existe' });
       }
-    });
 
-    const userId = newUser.id;
-    res.status(201).json({ message: 'Usuario registrado con éxito', id: userId });
+      console.log('Hasheando la contraseña...');
+      const hashedPassword = await bcrypt.hash(password, 10);
+      console.log('Creando nuevo usuario...');
+      const newUser = await prisma.usuario.create({
+          data: {
+              email,
+              password: hashedPassword,
+          }
+      });
+
+      const userId = newUser.id;
+      console.log('Usuario creado con ID:', userId);
+      
+      const accessToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: '1h' });
+      const refreshToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+      console.log('Token creado:', accessToken); // Log para verificar el token
+
+      res.cookie('token', accessToken, {
+          maxAge: 3600000,
+          sameSite: 'Strict' // Cambia a 'Lax' si es necesario
+      });
+
+      res.cookie('refresh-token', refreshToken, {
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+          sameSite: 'Strict' // Cambia a 'Lax' si es necesario
+      });
+
+      res.status(201).json({ message: 'Usuario registrado con éxito' });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Error al registrar el usuario' });
+      console.error('Error en el registro:', err);
+      res.status(500).json({ message: 'Error al registrar el usuario' });
   }
 };
+
 
 export const loginUser = async (req, res) => {
   const { email, password } = req.body;
