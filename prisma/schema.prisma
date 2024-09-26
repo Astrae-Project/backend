@@ -32,16 +32,16 @@ model Startup {
   id                    Int           @id @default(autoincrement())
   id_usuario            Int
   nombre                String        @db.VarChar(255)
-  username              String        @unique @default("") @db.VarChar(255) // Agregamos username único
+  username              String        @unique @db.VarChar(255) // Evitar usar un valor por defecto vacío
   sector                String        @db.VarChar(255)
-  fase_desarrollo       String        @db.VarChar(255)
   estado_financiacion   String        @db.VarChar(255)
-  plantilla             Int?
+  plantilla             Int?          // Mantener como opcional, pero manejar correctamente
   porcentaje_disponible Decimal       @default(100) @db.Decimal(5, 2)
-  inversiones           Inversion[]
-  ofertas               Oferta[]
+  inversiones           Inversion[]   // Verifica el modelo Inversion
+  ofertas               Oferta[]      // Verifica el modelo Oferta
   usuario               Usuario       @relation(fields: [id_usuario], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
+
 
 model Inversion {
   id                   Int         @id @default(autoincrement())

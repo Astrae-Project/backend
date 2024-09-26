@@ -82,22 +82,30 @@ export const investorRole = async (req, res) => {
 
 
 export const startupRole = async (req, res) => {
-  const userId = parseInt(req.params.id, 10); // Asegúrate de que el ID es un número
-  const { nombre_startup, sector, fase_desarrollo, estado_financiacion, plantilla } = req.body;
+  const userId = parseInt(req.params.id, 10);
+  const { nombre_startup, usuario, sector, porcentaje, estado_financiacion, plantilla } = req.body;
 
   // Validar los campos obligatorios
-  if (!nombre_startup || !sector || !fase_desarrollo || !estado_financiacion || plantilla === undefined) {
-    return res.status(400).json({ message: 'Faltan campos requeridos' });
+  if (!nombre_startup || !usuario || !sector || porcentaje < 0 || porcentaje > 100 || !estado_financiacion || plantilla < 0) {
+    return res.status(400).json({ message: 'Faltan campos requeridos o campos inválidos' });
+  }
+
+  // Asegúrate de convertir plantilla y porcentaje a número
+  const plantillaInt = parseInt(plantilla, 10);
+  const porcentajeInt = parseInt(porcentaje, 10);
+
+  // Validar conversión
+  if (isNaN(plantillaInt) || isNaN(porcentajeInt)) {
+    return res.status(400).json({ message: 'Los campos plantilla y porcentaje deben ser números válidos.' });
   }
 
   try {
-    // Verificar si la startup ya tiene un perfil
-    const existingStartup = await prisma.startup.findUnique({
-      where: { id: userId } // Verificamos por `id_usuario`
+    // Verificar si el usuario existe
+    const user = await prisma.usuario.findUnique({
+      where: { id: userId }
     });
-
-    if (existingStartup) {
-      return res.status(400).json({ message: 'El perfil de startup ya existe para este usuario' });
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
     }
 
     // Insertar la startup en la base de datos
@@ -105,30 +113,18 @@ export const startupRole = async (req, res) => {
       data: {
         id_usuario: userId,
         nombre: nombre_startup,
+        username: usuario,
         sector: sector,
-        fase_desarrollo: fase_desarrollo,
         estado_financiacion: estado_financiacion,
-        plantilla: plantilla
+        plantilla: plantillaInt, // Usa el valor convertido aquí
+        porcentaje_disponible: porcentajeInt // Y aquí
       }
     });
 
-    const startupId = newStartup.id;
-
-    // Generar el token JWT ahora que el perfil está completo
-    const token = jwt.sign({ userId, startupId }, process.env.JWT_SECRET, { expiresIn: '1h' });
-
-    // Establecer la cookie
-    res.cookie('token', token, {
-      httpOnly: true, // No accesible desde JavaScript del lado del cliente
-      secure: process.env.NODE_ENV === 'production', // Solo enviar en HTTPS en producción
-      sameSite: 'Strict', // Rechazar cookies de otros sitios
-      maxAge: 3600000 // La cookie expira en 1 hora
-    });
-
-    // Redirigir a la app con la información del perfil
-    res.status(200).json({ message: 'Startup creada con éxito', redirectTo: 'http://localhost:3000/', token });
+    // Respuesta exitosa
+    res.status(200).json({ message: 'Startup creada con éxito', redirectTo: 'http://localhost:3000/' });
   } catch (err) {
     console.error('Error al completar el perfil de la startup:', err);
-    res.status(500).json({ message: 'Error al completar el perfil de la startup' });
+    res.status(500).json({ message: 'Error al completar el perfil de la startup', error: err.message });
   }
 };
