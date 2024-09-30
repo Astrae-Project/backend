@@ -2,46 +2,35 @@ import prisma from '../lib/prismaClient.mjs'; // Asegúrate de que la importaci�
 import jwt from 'jsonwebtoken';
 
 export const selectRole = async (req, res) => {
-  const userId = parseInt(req.params.id, 10); // Asegúrate de que el ID es un número
-  const { rol } = req.body;
-
-  // Validar el rol recibido
-  if (!rol || (rol !== 'inversor' && rol !== 'startup')) {
-    return res.status(400).json({ message: 'Selecciona un rol válido' });
-  }
-
   try {
-    // Comprobar si el usuario ya existe
-    const user = await prisma.usuario.findUnique({
-      where: { id: userId }
-    });
+    const token = req.cookies.token;
 
-    if (!user) {
-      return res.status(404).json({ message: 'Usuario no encontrado' });
+    if (!token) {
+      return res.status(401).json({ message: 'Token no proporcionado' });
     }
 
-    // Verificar si ya tiene un rol asignado
-    if (user.rol) {
-      return res.status(800).json({ message: 'El usuario ya tiene un rol asignado' });
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decodedToken.userId;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
     }
 
-    // Actualizar el rol del usuario en la base de datos
+    const { rol } = req.body;
+
     await prisma.usuario.update({
       where: { id: userId },
-      data: { rol: rol }
+      data: { rol }
     });
 
-    // Redirigir al siguiente paso según el rol
-    if (rol === 'inversor') {
-      return res.json({ message: 'Rol seleccionado: inversor', redirectUrl: `/crear-inversor/${userId}` });
-    } else if (rol === 'startup') {
-      return res.json({ message: 'Rol seleccionado: startup', redirectUrl: `/crear-startup/${userId}` });
-    }
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Error al seleccionar el rol' });
+    // Enviar el userId en la respuesta
+    res.status(200).json({ message: 'Rol seleccionado con éxito', userId });
+  } catch (error) {
+    console.error('Error al seleccionar rol:', error);
+    res.status(500).json({ message: 'Error al seleccionar rol' });
   }
 };
+
 
 
 export const investorRole = async (req, res) => {

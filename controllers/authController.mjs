@@ -8,56 +8,61 @@ export const registerUser = async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
-      console.log('Faltan datos:', { email, password });
-      return res.status(400).json({ message: 'Por favor, envía email y contraseña' });
+    console.log('Faltan datos:', { email, password });
+    return res.status(400).json({ message: 'Por favor, envía email y contraseña' });
   }
 
   try {
-      console.log('Verificando si el usuario ya existe...');
-      const existingUser = await prisma.usuario.findUnique({
-          where: { email }
-      });
+    console.log('Verificando si el usuario ya existe...');
+    const existingUser = await prisma.usuario.findUnique({
+      where: { email }
+    });
 
-      if (existingUser) {
-          console.log('El usuario ya existe:', email);
-          return res.status(400).json({ message: 'El usuario ya existe' });
+    if (existingUser) {
+      console.log('El usuario ya existe:', email);
+      return res.status(400).json({ message: 'El usuario ya existe' });
+    }
+
+    console.log('Hasheando la contraseña...');
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    console.log('Creando nuevo usuario...');
+    const newUser = await prisma.usuario.create({
+      data: {
+        email,
+        password: hashedPassword,
       }
+    });
 
-      console.log('Hasheando la contraseña...');
-      const hashedPassword = await bcrypt.hash(password, 10);
-      console.log('Creando nuevo usuario...');
-      const newUser = await prisma.usuario.create({
-          data: {
-              email,
-              password: hashedPassword,
-          }
-      });
+    const userId = newUser.id;
+    console.log('Usuario creado con ID:', userId);
 
-      const userId = newUser.id;
-      console.log('Usuario creado con ID:', userId);
-      
-      const accessToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: '1h' });
-      const refreshToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    // Crear tokens de acceso y refresco
+    const accessToken = jwt.sign({ userId: newUser.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const refreshToken = jwt.sign({ userId: newUser.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-      console.log('Token creado:', accessToken); // Log para verificar el token
+    // Imprimir el token en la consola
+    console.log('Token creado:', accessToken);
 
-      res.cookie('token', accessToken, {
-          maxAge: 3600000,
-          sameSite: 'Strict' // Cambia a 'Lax' si es necesario
-      });
+    // Guardar los tokens en cookies
+    res.cookie('token', accessToken, {
+      maxAge: 3600000,
+      httpOnly: true,
+      sameSite: 'Strict' // Ajusta según sea necesario
+    });
 
-      res.cookie('refresh-token', refreshToken, {
-          maxAge: 7 * 24 * 60 * 60 * 1000,
-          sameSite: 'Strict' // Cambia a 'Lax' si es necesario
-      });
+    res.cookie('refresh-token', refreshToken, {
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      httpOnly: true,
+      sameSite: 'Strict'
+    });
 
-      res.status(201).json({ message: 'Usuario registrado con éxito' });
+    res.status(201).json({ message: 'Usuario registrado con éxito', userId: newUser.id }); // Devuelve userId
   } catch (err) {
-      console.error('Error en el registro:', err);
-      res.status(500).json({ message: 'Error al registrar el usuario' });
+    console.error('Error en el registro:', err);
+    res.status(500).json({ message: 'Error al registrar el usuario' });
   }
 };
-
 
 export const loginUser = async (req, res) => {
   const { email, password } = req.body;
@@ -81,35 +86,37 @@ export const loginUser = async (req, res) => {
     const accessToken = jwt.sign({ userId: user.id, role: user.rol }, process.env.JWT_SECRET, { expiresIn: '1h' });
     const refreshToken = jwt.sign({ userId: user.id, role: user.rol }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
 
+    // Imprimir el token en la consola
+    console.log('Token creado:', accessToken);
+
+    // Guardar los tokens en cookies
     res.cookie('token', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: 3600000, // 1 hora
-      sameSite: 'Strict' // Ajustado para desarrollo y pruebas
+      sameSite: 'Strict'
     });
 
     res.cookie('refresh-token', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
-      sameSite: 'Strict' // Ajustado para desarrollo y pruebas
+      sameSite: 'Strict'
     });
 
     return res.status(200).json({ message: 'Inicio de sesión exitoso', accessToken, refreshToken });
-
   } catch (error) {
     console.error('Error en loginUser:', error);
     return res.status(500).json({ message: 'Error en el servidor' });
   }
 };
 
-
-export const loginOut = async (req,res) => {
+export const loginOut = async (req, res) => {
   try {
     // Eliminar el token JWT de las cookies
-    res.cookie('token', '', { 
-      httpOnly: true, // Solo accesible desde el servidor
-      secure: process.env.NODE_ENV === 'production', // Solo en HTTPS en producción
+    res.cookie('token', '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
       expires: new Date(0) // Establecer una fecha de expiración pasada para eliminar la cookie
     });
 
@@ -118,4 +125,4 @@ export const loginOut = async (req,res) => {
     console.error('Error al cerrar sesión:', error);
     res.status(500).json({ message: 'Error al cerrar sesión' });
   }
-}
+};

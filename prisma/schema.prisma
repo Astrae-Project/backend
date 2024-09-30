@@ -8,72 +8,81 @@ generator client {
 }
 
 model Usuario {
-  id         Int    @id @default(autoincrement())
-  email      String @unique
-  password String
-  rol        Rol?   // Cambié esto a un enum opcional
+  id         Int        @id @default(autoincrement())
+  email      String     @unique
+  password   String
+  rol        Rol? // Cambié esto a un enum opcional
   inversores Inversor[]
   startups   Startup[]
 }
 
 model Inversor {
-  id               Int       @id @default(autoincrement())
+  id               Int         @id @default(autoincrement())
   id_usuario       Int
-  nombre           String    @db.VarChar(255)
-  username         String    @unique @default("") @db.VarChar(255) // Agregamos username único
+  nombre           String      @db.VarChar(255)
+  username         String      @unique @default("") @db.VarChar(255) // Agregamos username único
   perfil_inversion String
   inversiones      Inversion[]
-  usuario          Usuario   @relation(fields: [id_usuario], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  usuario          Usuario     @relation(fields: [id_usuario], references: [id], onDelete: NoAction, onUpdate: NoAction)
   portfolio        Portfolio?
   ofertas          Oferta[]
 }
 
 model Startup {
-  id                    Int           @id @default(autoincrement())
+  id                    Int         @id @default(autoincrement())
   id_usuario            Int
-  nombre                String        @db.VarChar(255)
-  username              String        @unique @db.VarChar(255) // Evitar usar un valor por defecto vacío
-  sector                String        @db.VarChar(255)
-  estado_financiacion   String        @db.VarChar(255)
-  plantilla             Int?          // Mantener como opcional, pero manejar correctamente
-  porcentaje_disponible Decimal       @default(100) @db.Decimal(5, 2)
-  inversiones           Inversion[]   // Verifica el modelo Inversion
-  ofertas               Oferta[]      // Verifica el modelo Oferta
-  usuario               Usuario       @relation(fields: [id_usuario], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  nombre                String      @db.VarChar(255)
+  username              String      @unique @db.VarChar(255) // Evitar usar un valor por defecto vacío
+  sector                String      @db.VarChar(255)
+  estado_financiacion   String      @db.VarChar(255)
+  plantilla             Int? // Mantener como opcional, pero manejar correctamente
+  porcentaje_disponible Decimal     @default(100) @db.Decimal(5, 2)
+  inversiones           Inversion[] // Verifica el modelo Inversion
+  ofertas               Oferta[] // Verifica el modelo Oferta
+  usuario               Usuario     @relation(fields: [id_usuario], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
-
 model Inversion {
-  id                   Int         @id @default(autoincrement())
+  id                   Int      @id @default(autoincrement())
   id_inversor          Int
   id_startup           Int
-  monto_invertido      Decimal     @db.Decimal(12, 2)
-  porcentaje_adquirido Decimal     @db.Decimal(5, 2)
-  fecha                DateTime    @default(now()) @db.Timestamp(6)
-  inversor             Inversor    @relation(fields: [id_inversor], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  startup              Startup     @relation(fields: [id_startup], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  monto_invertido      Decimal  @db.Decimal(12, 2)
+  porcentaje_adquirido Decimal  @db.Decimal(5, 2)
+  fecha                DateTime @default(now()) @db.Timestamp(6)
+  inversor             Inversor @relation(fields: [id_inversor], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  startup              Startup  @relation(fields: [id_startup], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model Oferta {
-  id                      Int         @id @default(autoincrement())
+  id                      Int       @id @default(autoincrement())
   id_inversor             Int
   id_startup              Int
-  monto_ofrecido          Decimal     @db.Decimal(12, 2)
-  porcentaje_ofrecido     Decimal     @db.Decimal(5, 2)
-  estado                  String      @db.VarChar(50)
-  escrow_id               String?     @db.VarChar(255)
-  contraoferta_monto      Decimal?    @db.Decimal(12, 2)
-  contraoferta_porcentaje Decimal?    @db.Decimal(5, 2)
-  fecha_creacion          DateTime?   @default(now()) @db.Timestamp(6)
-  inversor                Inversor    @relation(fields: [id_inversor], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  startup                 Startup     @relation(fields: [id_startup], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  monto_ofrecido          Decimal   @db.Decimal(12, 2)
+  porcentaje_ofrecido     Decimal   @db.Decimal(5, 2)
+  estado                  String    @db.VarChar(50)
+  escrow_id               Int?
+  contraoferta_monto      Decimal?  @db.Decimal(12, 2)
+  contraoferta_porcentaje Decimal?  @db.Decimal(5, 2)
+  fecha_creacion          DateTime? @default(now()) @db.Timestamp(6)
+  inversor                Inversor  @relation(fields: [id_inversor], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  startup                 Startup   @relation(fields: [id_startup], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Escrow                  Escrow[]
 }
 
 model Portfolio {
-  id             Int         @id @default(autoincrement())
-  id_inversor    Int         @unique
-  fecha_creacion DateTime    @default(now()) @db.Timestamp(6)
-  inversor       Inversor    @relation(fields: [id_inversor], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id             Int      @id @default(autoincrement())
+  id_inversor    Int      @unique
+  fecha_creacion DateTime @default(now()) @db.Timestamp(6)
+  inversor       Inversor @relation(fields: [id_inversor], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model Escrow {
+  id             Int      @id @default(autoincrement())
+  id_oferta      Int // Referencia a la oferta
+  monto          Decimal  @db.Decimal(12, 2)
+  estado         String   @db.VarChar(50) // Ejemplo: "pendiente", "completado", "cancelado"
+  fecha_creacion DateTime @default(now()) @db.Timestamp(6)
+  oferta         Oferta   @relation(fields: [id_oferta], references: [id], onDelete: Cascade)
 }
 
 enum Rol {

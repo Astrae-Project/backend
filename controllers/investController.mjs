@@ -1,15 +1,25 @@
 import prisma from '../lib/prismaClient.mjs';
 
-// Función para hacer una oferta
-export const investorOffer = async (req, res) => {
+export const offer = async (req, res) => {
+  req.user ={
+    id: 10
+  }
+
   const { id_startup, monto_ofrecido, porcentaje_ofrecido } = req.body;
-  const { userId } = req.user;
 
   if (!id_startup || !monto_ofrecido || !porcentaje_ofrecido) {
     return res.status(400).json({ message: 'Faltan campos requeridos' });
   }
 
   try {
+    const inversor = await prisma.inversor.findFirst({
+      where: { id_usuario: req.user.id },
+    });
+
+    if (!inversor) {
+      return res.status(404).json({ message: 'Inversor no encontrado' });
+    }
+
     const startup = await prisma.startup.findUnique({
       where: { id: id_startup },
     });
@@ -18,22 +28,44 @@ export const investorOffer = async (req, res) => {
       return res.status(404).json({ message: 'Startup no encontrada' });
     }
 
+    // Crear la oferta
     const oferta = await prisma.oferta.create({
       data: {
-        id_inversor: userId,
+        id_inversor: inversor.id,
         id_startup,
         monto_ofrecido,
         porcentaje_ofrecido,
         estado: 'pendiente',
+        // Aquí asignamos el escrow_id
+        escrow_id: null, // Inicialmente lo dejamos en null
       },
     });
 
-    res.status(201).json({ message: 'Oferta enviada con éxito', oferta });
+    // Crear el registro de escrow
+    const escrow = await prisma.escrow.create({
+      data: {
+        id_oferta: oferta.id,
+        monto: monto_ofrecido,
+        estado: 'pendiente',
+      },
+    });
+
+    // Actualizar la oferta para incluir el escrow_id
+    const updatedOferta = await prisma.oferta.update({
+      where: { id: oferta.id },
+      data: {
+        escrow_id: escrow.id,
+      },
+    });
+
+    res.status(201).json({ message: 'Oferta enviada con éxito', oferta: updatedOferta, escrow });
   } catch (err) {
     console.error('Error al enviar la oferta:', err);
     res.status(500).json({ message: 'Error al enviar la oferta' });
   }
 };
+
+
 
 // Función para aceptar una oferta
 export const offerAccepted = async (req, res) => {
