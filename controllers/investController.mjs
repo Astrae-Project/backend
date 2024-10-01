@@ -1,9 +1,7 @@
 import prisma from '../lib/prismaClient.mjs';
 
 export const offer = async (req, res) => {
-  req.user ={
-    id: 10
-  }
+  const { userId } = req.user || {};
 
   const { id_startup, monto_ofrecido, porcentaje_ofrecido } = req.body;
 
@@ -11,9 +9,14 @@ export const offer = async (req, res) => {
     return res.status(400).json({ message: 'Faltan campos requeridos' });
   }
 
+  // Validaciones adicionales
+  if (typeof monto_ofrecido !== 'number' || typeof porcentaje_ofrecido !== 'number') {
+    return res.status(400).json({ message: 'Los montos deben ser números válidos' });
+  }
+
   try {
     const inversor = await prisma.inversor.findFirst({
-      where: { id_usuario: req.user.id },
+      where: { id_usuario: userId },
     });
 
     if (!inversor) {
@@ -36,7 +39,6 @@ export const offer = async (req, res) => {
         monto_ofrecido,
         porcentaje_ofrecido,
         estado: 'pendiente',
-        // Aquí asignamos el escrow_id
         escrow_id: null, // Inicialmente lo dejamos en null
       },
     });
@@ -65,12 +67,14 @@ export const offer = async (req, res) => {
   }
 };
 
-
-
 // Función para aceptar una oferta
 export const offerAccepted = async (req, res) => {
   const ofertaId = parseInt(req.params.id);
-  const { userId } = req.user;
+  const { userId } = req.user || {};
+
+  if (!userId) {
+    return res.status(401).json({ message: 'Usuario no autenticado' });
+  }
 
   try {
     const oferta = await prisma.oferta.findUnique({
@@ -91,7 +95,6 @@ export const offerAccepted = async (req, res) => {
       data: { estado: 'aceptada' },
     });
 
-    // Aquí deberías redirigir o responder con una URL adecuada
     res.status(200).json({ message: 'Oferta aceptada con éxito' });
   } catch (err) {
     console.error('Error al aceptar la oferta:', err);
@@ -102,7 +105,11 @@ export const offerAccepted = async (req, res) => {
 // Función para rechazar una oferta
 export const offerRejected = async (req, res) => {
   const ofertaId = parseInt(req.params.id);
-  const { userId } = req.user;
+  const { userId } = req.user || {};
+
+  if (!userId) {
+    return res.status(401).json({ message: 'Usuario no autenticado' });
+  }
 
   try {
     const oferta = await prisma.oferta.findUnique({
@@ -123,7 +130,6 @@ export const offerRejected = async (req, res) => {
       data: { estado: 'rechazada' },
     });
 
-    // Aquí deberías redirigir o responder con una URL adecuada
     res.status(200).json({ message: 'Oferta rechazada con éxito' });
   } catch (err) {
     console.error('Error al rechazar la oferta:', err);
@@ -135,7 +141,7 @@ export const offerRejected = async (req, res) => {
 export const counteroffer = async (req, res) => {
   const ofertaId = parseInt(req.params.id);
   const { monto_ofrecido, porcentaje_ofrecido } = req.body;
-  const { userId } = req.user;
+  const { userId } = req.user || {};
 
   if (!monto_ofrecido || !porcentaje_ofrecido) {
     return res.status(400).json({ message: 'Faltan campos requeridos' });
@@ -162,7 +168,6 @@ export const counteroffer = async (req, res) => {
       },
     });
 
-    // Aquí deberías redirigir o responder con una URL adecuada
     res.status(200).json({ message: 'Contraoferta realizada con éxito' });
   } catch (err) {
     console.error('Error al hacer la contraoferta:', err);
@@ -173,7 +178,11 @@ export const counteroffer = async (req, res) => {
 // Función para aceptar una contraoferta
 export const acceptCounteroffer = async (req, res) => {
   const ofertaId = parseInt(req.params.id);
-  const { userId } = req.user;
+  const { userId } = req.user || {};
+
+  if (!userId) {
+    return res.status(401).json({ message: 'Usuario no autenticado' });
+  }
 
   try {
     const oferta = await prisma.oferta.findUnique({
@@ -197,7 +206,6 @@ export const acceptCounteroffer = async (req, res) => {
       },
     });
 
-    // Aquí deberías redirigir o responder con una URL adecuada
     res.status(200).json({ message: 'Contraoferta aceptada con éxito' });
   } catch (err) {
     console.error('Error al aceptar la contraoferta:', err);
@@ -207,30 +215,34 @@ export const acceptCounteroffer = async (req, res) => {
 
 export const rejectCounteroffer = async (req, res) => {
   const { id } = req.params;
-  const id_startup = req.user.userId; // ID de la startup extraído del token
+  const { userId } = req.user || {};
+
+  if (!userId) {
+    return res.status(401).json({ message: 'Usuario no autenticado' });
+  }
 
   try {
     const oferta = await prisma.oferta.findUnique({
       where: { id },
-      include: { startup: true }
+      include: { startup: true },
     });
 
-    if (!oferta) return res.status(404).json({ message: 'Contraoferta no encontrada' });
-    if (oferta.startup.id_usuario !== id_startup) return res.status(403).json({ message: 'No tienes permiso para rechazar esta contraoferta' });
+    if (!oferta) {
+      return res.status(404).json({ message: 'Oferta no encontrada' });
+    }
+
+    if (oferta.startup.id_usuario !== userId) {
+      return res.status(403).json({ message: 'No tienes permiso para rechazar esta contraoferta' });
+    }
 
     await prisma.oferta.update({
       where: { id },
-      data: { estado: 'rechazada' }
+      data: { estado: 'rechazada' },
     });
 
     res.status(200).json({ message: 'Contraoferta rechazada con éxito' });
   } catch (err) {
     console.error('Error al rechazar la contraoferta:', err);
-    res.status(500).json({ message: 'Error al rechazar la contraoferta'})
-  };
+    res.status(500).json({ message: 'Error al rechazar la contraoferta' });
+  }
 };
-
-
-
-
-

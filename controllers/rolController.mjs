@@ -62,13 +62,23 @@ export const investorRole = async (req, res) => {
       }
     });
 
-    res.status(201).json({ message: 'Inversor creado con éxito', inversorId: newInversor.id });
+    // Crear el portafolio asociado al nuevo inversor
+    await prisma.portfolio.create({
+      data: {
+        inversor: {
+          connect: { id: newInversor.id } // Conectar el portafolio con el inversor
+        },
+        // Agrega otros campos del portafolio si es necesario
+      }
+    });
+
+    res.status(201).json({ message: 'Inversor y portafolio creados con éxito', inversorId: newInversor.id });
   } catch (err) {
-    console.error('Error al completar el perfil del inversor:', err);
-    res.status(500).json({ message: 'Error al completar el perfil del inversor' });
+    console.error('Error al completar el perfil del inversor:', err.message);
+    console.error(err); // Imprime el error completo para más detalles
+    res.status(500).json({ message: 'Error al completar el perfil del inversor', error: err.message });
   }
 };
-
 
 export const startupRole = async (req, res) => {
   const userId = parseInt(req.params.id, 10);
