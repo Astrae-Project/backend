@@ -30,9 +30,9 @@ app.use(cookieParser());
 
 // Rutas  
 app.use('/api/auth', authRoutes);
-app.use('/api/profile', profileRoutes, verifyToken);
+app.use('/api/profile', profileRoutes);
 app.use('/api/invest', investRoutes, verifyToken);
-app.use('/search', searchingRoutes, verifyToken);
+app.use('api/search', searchingRoutes, verifyToken);
 
 // Ruta principal
 app.get('/', (req, res) => {

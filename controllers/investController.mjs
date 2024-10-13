@@ -1,8 +1,9 @@
 import prisma from '../lib/prismaClient.mjs';
+import { calcularValoracion } from '../lib/functionCalculations.mjs';
 
+// Función para crear una oferta
 export const offer = async (req, res) => {
   const { userId } = req.user || {};
-
   const { id_startup, monto_ofrecido, porcentaje_ofrecido } = req.body;
 
   if (!id_startup || !monto_ofrecido || !porcentaje_ofrecido) {
@@ -67,10 +68,31 @@ export const offer = async (req, res) => {
   }
 };
 
+const getPorcentajeDisponible = async (startupId) => {
+  // Obtener todas las inversiones relacionadas con la startup
+  const inversiones = await prisma.inversion.findMany({
+    where: {
+      id_startup: startupId,
+    },
+  });
+
+  // Sumar todos los porcentajes adquiridos
+  const porcentajeTotalAdquirido = inversiones.reduce((total, inversion) => {
+    return total + parseFloat(inversion.porcentaje_adquirido);
+  }, 0);
+
+  // Calcular el porcentaje disponible
+  const porcentajeDisponible = 100 - porcentajeTotalAdquirido;
+
+  console.log(`Porcentaje total adquirido: ${porcentajeTotalAdquirido}, Porcentaje disponible: ${porcentajeDisponible}`);
+
+  return porcentajeDisponible;
+};
+
 // Función para aceptar una oferta
 export const offerAccepted = async (req, res) => {
-  const ofertaId = parseInt(req.params.id);
-  const { userId } = req.user || {};
+  const ofertaId = parseInt(req.params.id_oferta); // ID de la oferta
+  const userId = parseInt(req.params.id_usuario); // ID del usuario
 
   if (!userId) {
     return res.status(401).json({ message: 'Usuario no autenticado' });
@@ -79,7 +101,7 @@ export const offerAccepted = async (req, res) => {
   try {
     const oferta = await prisma.oferta.findUnique({
       where: { id: ofertaId },
-      include: { startup: true },
+      include: { startup: true, escrow: true }, // Incluir escrow aquí
     });
 
     if (!oferta) {
@@ -90,11 +112,51 @@ export const offerAccepted = async (req, res) => {
       return res.status(403).json({ message: 'No tienes permiso para aceptar esta oferta' });
     }
 
-    await prisma.oferta.update({
-      where: { id: ofertaId },
-      data: { estado: 'aceptada' },
+    // Obtener el porcentaje disponible de la startup
+    const porcentajeDisponible = await getPorcentajeDisponible(oferta.id_startup);
+    const porcentajeOfrecido = parseFloat(oferta.porcentaje_ofrecido);
+
+    console.log(`Porcentaje ofrecido: ${porcentajeOfrecido}, Porcentaje disponible: ${porcentajeDisponible}`);
+
+    if (porcentajeOfrecido > porcentajeDisponible) {
+      return res.status(400).json({ message: 'El porcentaje ofrecido es mayor que el porcentaje disponible' });
+    }
+
+    // Actualizar la oferta y el estado de escrow
+    await prisma.$transaction(async (prisma) => {
+      await prisma.oferta.update({
+        where: { id: ofertaId },
+        data: { estado: 'aceptada' },
+      });
+
+      // Actualizar el estado del escrow usando el id del escrow
+      await prisma.escrow.update({
+        where: { id: oferta.escrow_id }, // Aquí usamos el id del escrow
+        data: { estado: 'aceptado' },
+      });
+
+      // Crear la inversión
+      await prisma.inversion.create({
+        data: {
+          id_inversor: oferta.id_inversor,
+          id_startup: oferta.id_startup,
+          monto_invertido: oferta.monto_ofrecido,
+          porcentaje_adquirido: oferta.porcentaje_ofrecido,
+        },
+      });
+
+      // Actualizar el porcentaje disponible de la startup
+      await prisma.startup.update({
+        where: { id: oferta.id_startup },
+        data: {
+          porcentaje_disponible: {
+            decrement: oferta.porcentaje_ofrecido,
+          },
+        },
+      });
     });
 
+    const valoracion = await calcularValoracion(oferta.id_startup);
     res.status(200).json({ message: 'Oferta aceptada con éxito' });
   } catch (err) {
     console.error('Error al aceptar la oferta:', err);
@@ -102,10 +164,11 @@ export const offerAccepted = async (req, res) => {
   }
 };
 
+
 // Función para rechazar una oferta
 export const offerRejected = async (req, res) => {
-  const ofertaId = parseInt(req.params.id);
-  const { userId } = req.user || {};
+  const ofertaId = parseInt(req.params.id_oferta); // ID de la oferta
+  const userId = parseInt(req.params.id_usuario); // ID del usuario
 
   if (!userId) {
     return res.status(401).json({ message: 'Usuario no autenticado' });
@@ -114,7 +177,7 @@ export const offerRejected = async (req, res) => {
   try {
     const oferta = await prisma.oferta.findUnique({
       where: { id: ofertaId },
-      include: { startup: true },
+      include: { startup: true, escrow: true },
     });
 
     if (!oferta) {
@@ -125,9 +188,19 @@ export const offerRejected = async (req, res) => {
       return res.status(403).json({ message: 'No tienes permiso para rechazar esta oferta' });
     }
 
+    // Verificar si la oferta ya ha sido aceptada o rechazada
+    if (oferta.estado === 'aceptada' || oferta.estado === 'rechazada') {
+      return res.status(400).json({ message: 'Esta oferta ya ha sido aceptada o rechazada' });
+    }
+
     await prisma.oferta.update({
       where: { id: ofertaId },
       data: { estado: 'rechazada' },
+    });
+
+    await prisma.escrow.update({
+      where: { id: oferta.escrow_id },
+      data: { estado: 'rechazado' },
     });
 
     res.status(200).json({ message: 'Oferta rechazada con éxito' });
@@ -139,9 +212,9 @@ export const offerRejected = async (req, res) => {
 
 // Función para hacer una contraoferta
 export const counteroffer = async (req, res) => {
-  const ofertaId = parseInt(req.params.id);
+  const ofertaId = parseInt(req.params.id_oferta); // ID de la oferta
+  const userId = parseInt(req.params.id_usuario); // ID del usuario
   const { monto_ofrecido, porcentaje_ofrecido } = req.body;
-  const { userId } = req.user || {};
 
   if (!monto_ofrecido || !porcentaje_ofrecido) {
     return res.status(400).json({ message: 'Faltan campos requeridos' });
@@ -150,35 +223,48 @@ export const counteroffer = async (req, res) => {
   try {
     const oferta = await prisma.oferta.findUnique({
       where: { id: ofertaId },
+      include: { startup: true, escrow: true }, // Incluir escrow para rechazar
     });
 
     if (!oferta) {
       return res.status(404).json({ message: 'Oferta no encontrada' });
     }
 
-    if (oferta.id_inversor !== userId) {
+    // Verificar que el usuario que hace la contraoferta es la startup
+    if (oferta.startup.id_usuario !== userId) {
       return res.status(403).json({ message: 'No tienes permiso para hacer una contraoferta' });
     }
 
-    await prisma.oferta.update({
-      where: { id: ofertaId },
-      data: {
-        contraoferta_monto: monto_ofrecido,
-        contraoferta_porcentaje: porcentaje_ofrecido,
-      },
+    // Actualizar la oferta con la contraoferta
+    await prisma.$transaction(async (prisma) => {
+      await prisma.oferta.update({
+        where: { id: ofertaId },
+        data: {
+          contraoferta_monto: monto_ofrecido,
+          contraoferta_porcentaje: porcentaje_ofrecido,
+          estado: 'pendiente', // Cambiar el estado a 'pendiente' para que el inversor lo revise
+        },
+      });
+
+      // Rechazar el escrow relacionado con la oferta
+      await prisma.escrow.update({
+        where: { id: oferta.escrow_id },
+        data: { estado: 'rechazado' }, // Cambiar el estado del escrow a 'rechazado'
+      });
     });
 
-    res.status(200).json({ message: 'Contraoferta realizada con éxito' });
+    res.status(200).json({ message: 'Contraoferta realizada con éxito, escrow rechazado' });
   } catch (err) {
     console.error('Error al hacer la contraoferta:', err);
     res.status(500).json({ message: 'Error al hacer la contraoferta' });
   }
 };
 
+
 // Función para aceptar una contraoferta
 export const acceptCounteroffer = async (req, res) => {
-  const ofertaId = parseInt(req.params.id);
-  const { userId } = req.user || {};
+  const ofertaId = parseInt(req.params.id_oferta); // ID de la oferta
+  const userId = parseInt(req.params.id_usuario); // ID del usuario
 
   if (!userId) {
     return res.status(401).json({ message: 'Usuario no autenticado' });
@@ -187,23 +273,55 @@ export const acceptCounteroffer = async (req, res) => {
   try {
     const oferta = await prisma.oferta.findUnique({
       where: { id: ofertaId },
+      include: { inversor: true },
     });
 
     if (!oferta) {
       return res.status(404).json({ message: 'Oferta no encontrada' });
     }
 
-    if (oferta.startup.id_usuario !== userId) {
+    if (oferta.inversor.id_usuario !== userId) {
       return res.status(403).json({ message: 'No tienes permiso para aceptar esta contraoferta' });
     }
 
-    await prisma.oferta.update({
-      where: { id: ofertaId },
-      data: {
-        estado: 'aceptada',
-        monto_ofrecido: oferta.contraoferta_monto,
-        porcentaje_ofrecido: oferta.contraoferta_porcentaje,
-      },
+    // Verificar si la contraoferta ya ha sido aceptada o rechazada
+    if (oferta.estado === 'aceptada' || oferta.estado === 'rechazada') {
+      return res.status(400).json({ message: 'Esta contraoferta ya ha sido aceptada o rechazada' });
+    }
+
+    // Actualizar la contraoferta y el estado de escrow
+    await prisma.$transaction(async (prisma) => {
+      await prisma.oferta.update({
+        where: { id: ofertaId },
+        data: {
+          estado: 'aceptada',
+          monto_ofrecido: oferta.contraoferta_monto,
+          porcentaje_ofrecido: oferta.contraoferta_porcentaje,
+        },
+      });
+
+      await prisma.escrow.update({
+        where: { id_oferta: ofertaId },
+        data: { estado: 'aceptado' },
+      });
+
+      await prisma.inversion.create({
+        data: {
+          id_inversor: oferta.id_inversor,
+          id_startup: oferta.id_startup,
+          monto: oferta.contraoferta_monto,
+          porcentaje_adquirido: oferta.contraoferta_porcentaje,
+        },
+      });
+
+      await prisma.startup.update({
+        where: { id: oferta.id_startup },
+        data: {
+          porcentaje_disponible: {
+            decrement: oferta.contraoferta_porcentaje,
+          },
+        },
+      });
     });
 
     res.status(200).json({ message: 'Contraoferta aceptada con éxito' });
@@ -213,9 +331,10 @@ export const acceptCounteroffer = async (req, res) => {
   }
 };
 
+// Función para rechazar una contraoferta
 export const rejectCounteroffer = async (req, res) => {
-  const { id } = req.params;
-  const { userId } = req.user || {};
+  const ofertaId = parseInt(req.params.id_oferta); // ID de la oferta
+  const userId = parseInt(req.params.id_usuario); // ID del usuario
 
   if (!userId) {
     return res.status(401).json({ message: 'Usuario no autenticado' });
@@ -223,20 +342,26 @@ export const rejectCounteroffer = async (req, res) => {
 
   try {
     const oferta = await prisma.oferta.findUnique({
-      where: { id },
-      include: { startup: true },
+      where: { id: ofertaId },
+      include: { inversor: true },
     });
 
     if (!oferta) {
-      return res.status(404).json({ message: 'Oferta no encontrada' });
+      return res.status(404).json({ message: 'Contraoferta no encontrada' });
     }
 
-    if (oferta.startup.id_usuario !== userId) {
+    if (oferta.inversor.id_usuario !== userId) {
       return res.status(403).json({ message: 'No tienes permiso para rechazar esta contraoferta' });
     }
 
+    // Verificar si la contraoferta ya ha sido aceptada o rechazada
+    if (oferta.estado === 'aceptada' || oferta.estado === 'rechazada') {
+      return res.status(400).json({ message: 'Esta contraoferta ya ha sido aceptada o rechazada' });
+    }
+
+    // Actualizar la contraoferta a rechazada
     await prisma.oferta.update({
-      where: { id },
+      where: { id: ofertaId },
       data: { estado: 'rechazada' },
     });
 

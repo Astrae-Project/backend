@@ -1,3 +1,5 @@
+"use client"
+
 import prisma from "../lib/prismaClient.mjs";
 
 export const searchAll = async (req, res) => {

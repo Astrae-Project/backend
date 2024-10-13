@@ -6,14 +6,14 @@ const router = express.Router();
 
 router.post('/oferta/:id', offer)
 
-router.post('/oferta/:id/aceptar', offerAccepted)
+router.put('/oferta/:id_oferta/aceptar/:id_usuario', offerAccepted)
 
-router.post('/oferta/:id/rechazar', offerRejected)
+router.put('/oferta/:id_oferta/rechazar/:id_usuario', offerRejected)
 
-router.post('/contraoferta/:id', counteroffer)
+router.post('/contraoferta/:id_oferta/:id_usuario', counteroffer)
 
-router.post('/contraoferta/:id/aceptar', acceptCounteroffer)
+router.put('/contraoferta/:id_oferta/aceptar/:id_usuario', acceptCounteroffer)
 
-router.post('/contraoferta/:id/rechazar', rejectCounteroffer)
+router.put('/contraoferta/:id_oferta/rechazar/:id_usuario', rejectCounteroffer)
 
 export default router;

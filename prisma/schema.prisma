@@ -8,12 +8,21 @@ generator client {
 }
 
 model Usuario {
-  id         Int        @id @default(autoincrement())
-  email      String     @unique
-  password   String
-  rol        Rol? // Rol opcional
-  inversores Inversor[]
-  startups   Startup[]
+  id                 Int            @id @default(autoincrement())
+  email              String         @unique
+  password           String
+  rol                Rol? // Rol opcional
+  inversores         Inversor[] // Relación inversores
+  startups           Startup[] // Relación startups
+  fecha_creacion     DateTime       @default(now())
+  seguidores         Seguimiento[]  @relation("seguidores") // Relación seguidores
+  seguidos           Seguimiento[]  @relation("seguidos") // Relación seguidos
+  suscriptores       Suscripcion[]  @relation("suscriptores") // Relación suscriptores
+  suscritos          Suscripcion[]  @relation("suscritos") // Relación suscritos       
+  notificaciones     Notificacion[] // Relación con notificaciones
+  mensajes_enviados  Mensaje[]      @relation("enviados")
+  mensajes_recibidos Mensaje[]      @relation("recibidos")
+  verificado         Boolean        @default(false) // Si el usuario está verificado o no
 }
 
 model Inversor {
@@ -22,13 +31,11 @@ model Inversor {
   nombre           String      @db.VarChar(255)
   username         String      @unique @db.VarChar(255)
   perfil_inversion String
-  inversiones      Inversion[]
+  inversiones      Inversion[] // Inversiones realizadas por el inversor
   usuario          Usuario     @relation(fields: [id_usuario], references: [id])
-  portfolio        Portfolio?  
-  ofertas          Oferta[]
+  portfolio        Portfolio? // Portafolio del inversor
+  ofertas          Oferta[] // Ofertas hechas por el inversor
 }
-
-
 
 model Startup {
   id                    Int         @id @default(autoincrement())
@@ -39,6 +46,7 @@ model Startup {
   estado_financiacion   String      @db.VarChar(255)
   plantilla             Int?
   porcentaje_disponible Decimal     @default(100) @db.Decimal(5, 2)
+  valoracion            Decimal?    @db.Decimal(12, 2) // Valor de la startup
   inversiones           Inversion[] // Relación uno a muchos con inversiones recibidas
   ofertas               Oferta[] // Relación uno a muchos con ofertas
   usuario               Usuario     @relation(fields: [id_usuario], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -55,6 +63,7 @@ model Inversion {
   startup              Startup    @relation(fields: [id_startup], references: [id], onDelete: NoAction, onUpdate: NoAction)
   Portfolio            Portfolio? @relation(fields: [portfolioId], references: [id])
   portfolioId          Int?
+  Ingreso              Ingreso[]
 }
 
 model Oferta {
@@ -74,13 +83,13 @@ model Oferta {
 }
 
 model Portfolio {
-  id             Int      @id @default(autoincrement())
-  id_inversor    Int      @unique
-  inversor       Inversor @relation(fields: [id_inversor], references: [id]) // Solo este modelo tendrá la clave foránea
-  fecha_creacion DateTime @default(now())
+  id             Int         @id @default(autoincrement())
+  id_inversor    Int         @unique
+  inversor       Inversor    @relation(fields: [id_inversor], references: [id]) // Solo este modelo tendrá la clave foránea
+  fecha_creacion DateTime    @default(now())
   inversiones    Inversion[]
+  valor_total    Decimal     @default(0) @db.Decimal(12, 2) // Valor total del portafolio
 }
-
 
 model Escrow {
   id             Int      @id @default(autoincrement())
@@ -89,6 +98,52 @@ model Escrow {
   estado         String   @db.VarChar(50)
   fecha_creacion DateTime @default(now()) @db.Timestamp(6)
   oferta         Oferta   @relation(fields: [id_oferta], references: [id], onDelete: Cascade)
+}
+
+model Ingreso {
+  id           Int       @id @default(autoincrement())
+  id_inversion Int
+  monto        Decimal   @db.Decimal(12, 2) // Monto del ingreso
+  fecha        DateTime  @default(now()) // Fecha del ingreso
+  inversion    Inversion @relation(fields: [id_inversion], references: [id])
+}
+
+model Suscripcion {
+  id              Int      @id @default(autoincrement())
+  id_suscriptor   Int // Usuario que se suscribe
+  id_suscrito     Int // Usuario al que se suscribe
+  fecha_inicio    DateTime @default(now())
+  auto_renovacion Boolean  @default(false) // Indica si la suscripción se renovará automáticamente
+  suscriptor      Usuario  @relation("suscriptores", fields: [id_suscriptor], references: [id])
+  suscrito        Usuario  @relation("suscritos", fields: [id_suscrito], references: [id])
+}
+
+model Seguimiento {
+  id           Int      @id @default(autoincrement())
+  id_seguidor  Int // Usuario que sigue
+  id_seguido   Int // Usuario seguido
+  fecha_inicio DateTime @default(now())
+  seguidor     Usuario  @relation("seguidores", fields: [id_seguidor], references: [id])
+  seguido      Usuario  @relation("seguidos", fields: [id_seguido], references: [id])
+}
+
+model Notificacion {
+  id             Int      @id @default(autoincrement())
+  id_usuario     Int
+  contenido      String   @db.VarChar(255)
+  leido          Boolean  @default(false)
+  fecha_creacion DateTime @default(now()) @db.Timestamp(6)
+  usuario        Usuario  @relation(fields: [id_usuario], references: [id])
+}
+
+model Mensaje {
+  id          Int      @id @default(autoincrement())
+  contenido   String   @db.Text
+  id_emisor   Int // Usuario que envía el mensaje
+  id_receptor Int // Usuario que recibe el mensaje
+  fecha_envio DateTime @default(now()) @db.Timestamp(6)
+  emisor      Usuario  @relation("enviados", fields: [id_emisor], references: [id])
+  receptor    Usuario  @relation("recibidos", fields: [id_receptor], references: [id])
 }
 
 enum Rol {
