@@ -1,5 +1,5 @@
 import prisma from '../lib/prismaClient.mjs';
-import { calcularValoracion } from '../lib/functionCalculations.mjs';
+import { calcularValoracion, calcularValorTotalPortfolio } from '../lib/functionCalculations.mjs';
 
 // Función para crear una oferta
 export const offer = async (req, res) => {
@@ -89,7 +89,7 @@ const getPorcentajeDisponible = async (startupId) => {
   return porcentajeDisponible;
 };
 
-// Función para aceptar una oferta
+
 export const offerAccepted = async (req, res) => {
   const ofertaId = parseInt(req.params.id_oferta); // ID de la oferta
   const userId = parseInt(req.params.id_usuario); // ID del usuario
@@ -105,10 +105,12 @@ export const offerAccepted = async (req, res) => {
     });
 
     if (!oferta) {
+      console.log("Oferta no encontrada");
       return res.status(404).json({ message: 'Oferta no encontrada' });
     }
 
     if (oferta.startup.id_usuario !== userId) {
+      console.log("Permiso denegado para aceptar la oferta");
       return res.status(403).json({ message: 'No tienes permiso para aceptar esta oferta' });
     }
 
@@ -119,29 +121,51 @@ export const offerAccepted = async (req, res) => {
     console.log(`Porcentaje ofrecido: ${porcentajeOfrecido}, Porcentaje disponible: ${porcentajeDisponible}`);
 
     if (porcentajeOfrecido > porcentajeDisponible) {
+      console.log("El porcentaje ofrecido es mayor que el porcentaje disponible");
       return res.status(400).json({ message: 'El porcentaje ofrecido es mayor que el porcentaje disponible' });
     }
 
+    if (oferta.estado === 'aceptada' || oferta.estado === 'rechazada') {
+      console.log("Esta oferta ya ha sido aceptada o rechazada");
+      return res.status(400).json({ message: 'Esta oferta ya ha sido aceptada o rechazada' });
+    }
+
+    let nuevaInversion; // Declarar aquí para acceder después
+
     // Actualizar la oferta y el estado de escrow
     await prisma.$transaction(async (prisma) => {
+      // Actualizar estado de la oferta a "aceptada"
       await prisma.oferta.update({
         where: { id: ofertaId },
         data: { estado: 'aceptada' },
       });
 
-      // Actualizar el estado del escrow usando el id del escrow
+      // Actualizar estado de escrow
       await prisma.escrow.update({
-        where: { id: oferta.escrow_id }, // Aquí usamos el id del escrow
+        where: { id: oferta.escrow_id },
         data: { estado: 'aceptado' },
       });
 
       // Crear la inversión
-      await prisma.inversion.create({
+      nuevaInversion = await prisma.inversion.create({
         data: {
           id_inversor: oferta.id_inversor,
           id_startup: oferta.id_startup,
           monto_invertido: oferta.monto_ofrecido,
           porcentaje_adquirido: oferta.porcentaje_ofrecido,
+          valor: 0, // Valor a calcular posteriormente
+        },
+      });
+
+      console.log(`Nueva inversión creada: ${JSON.stringify(nuevaInversion)}`);
+
+      // Asociar la inversión al portfolio del inversor
+      await prisma.portfolio.update({
+        where: { id_inversor: oferta.id_inversor },
+        data: {
+          inversiones: {
+            connect: { id: nuevaInversion.id },
+          },
         },
       });
 
@@ -156,8 +180,22 @@ export const offerAccepted = async (req, res) => {
       });
     });
 
+    // Mover el cálculo y la actualización del valor de la inversión fuera de la transacción
     const valoracion = await calcularValoracion(oferta.id_startup);
-    res.status(200).json({ message: 'Oferta aceptada con éxito' });
+    const valor = (valoracion * (oferta.porcentaje_ofrecido / 100)); // Calcular el valor de la inversión
+
+    console.log(`Valoración calculada: ${valoracion}, Valor de la inversión: ${valor}`);
+
+    await prisma.inversion.update({
+      where: { id: nuevaInversion.id }, // Asegúrate de que esta ID sea accesible aquí
+      data: {
+        valor: valor, // Actualizar el valor calculado
+      },
+    });
+
+    const valorPortfolio = await calcularValorTotalPortfolio(oferta.id_inversor)
+
+    res.status(200).json({ message: 'Oferta aceptada y guardada en el portfolio con éxito' });
   } catch (err) {
     console.error('Error al aceptar la oferta:', err);
     res.status(500).json({ message: 'Error al aceptar la oferta' });

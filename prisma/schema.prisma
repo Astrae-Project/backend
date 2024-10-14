@@ -57,6 +57,7 @@ model Inversion {
   id_inversor          Int // Clave foránea que hace referencia a Inversor
   id_startup           Int // Clave foránea que hace referencia a Startup
   monto_invertido      Decimal    @db.Decimal(12, 2)
+  valor                Decimal    @db.Decimal(12, 2) @default(0) 
   porcentaje_adquirido Decimal    @db.Decimal(5, 2)
   fecha                DateTime   @default(now()) @db.Timestamp(6)
   inversor             Inversor   @relation(fields: [id_inversor], references: [id], onDelete: NoAction, onUpdate: NoAction)
