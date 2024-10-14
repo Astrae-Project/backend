@@ -311,7 +311,7 @@ export const acceptCounteroffer = async (req, res) => {
   try {
     const oferta = await prisma.oferta.findUnique({
       where: { id: ofertaId },
-      include: { inversor: true },
+      include: { inversor: true, startup: true }, // Incluir inversor y startup
     });
 
     if (!oferta) {
@@ -327,6 +327,17 @@ export const acceptCounteroffer = async (req, res) => {
       return res.status(400).json({ message: 'Esta contraoferta ya ha sido aceptada o rechazada' });
     }
 
+    // Obtener el porcentaje disponible de la startup
+    const porcentajeDisponible = await getPorcentajeDisponible(oferta.id_startup);
+    const porcentajeContraofrecido = parseFloat(oferta.contraoferta_porcentaje);
+
+    if (porcentajeContraofrecido > porcentajeDisponible) {
+      return res.status(400).json({ message: 'El porcentaje ofrecido es mayor que el porcentaje disponible' });
+    }
+
+    let nuevaInversion; // Declarar aquí para acceder después
+    let escrow; // Declarar variable para el escrow
+
     // Actualizar la contraoferta y el estado de escrow
     await prisma.$transaction(async (prisma) => {
       await prisma.oferta.update({
@@ -334,40 +345,62 @@ export const acceptCounteroffer = async (req, res) => {
         data: {
           estado: 'aceptada',
           monto_ofrecido: oferta.contraoferta_monto,
-          porcentaje_ofrecido: oferta.contraoferta_porcentaje,
+          porcentaje_ofrecido: porcentajeContraofrecido,
         },
       });
 
-      await prisma.escrow.update({
-        where: { id_oferta: ofertaId },
-        data: { estado: 'aceptado' },
-      });
-
-      await prisma.inversion.create({
+      // Crear la inversión
+      nuevaInversion = await prisma.inversion.create({
         data: {
           id_inversor: oferta.id_inversor,
           id_startup: oferta.id_startup,
-          monto: oferta.contraoferta_monto,
-          porcentaje_adquirido: oferta.contraoferta_porcentaje,
+          monto_invertido: oferta.contraoferta_monto,
+          porcentaje_adquirido: porcentajeContraofrecido,
+          valor: 0, // Valor a calcular posteriormente
         },
       });
 
+      // Asociar la inversión al portfolio del inversor
+      await prisma.portfolio.update({
+        where: { id_inversor: oferta.id_inversor },
+        data: {
+          inversiones: {
+            connect: { id: nuevaInversion.id },
+          },
+        },
+      });
+
+      // Actualizar el porcentaje disponible de la startup
       await prisma.startup.update({
         where: { id: oferta.id_startup },
         data: {
           porcentaje_disponible: {
-            decrement: oferta.contraoferta_porcentaje,
+            decrement: porcentajeContraofrecido,
           },
         },
       });
     });
 
-    res.status(200).json({ message: 'Contraoferta aceptada con éxito' });
+    // Mover el cálculo y la actualización del valor de la inversión fuera de la transacción
+    const valoracion = await calcularValoracion(oferta.id_startup);
+    const valor = (valoracion / porcentajeContraofrecido); // Calcular el valor de la inversión
+
+    await prisma.inversion.update({
+      where: { id: nuevaInversion.id }, // Asegúrate de que esta ID sea accesible aquí
+      data: {
+        valor: valor, // Actualizar el valor calculado
+      },
+    });
+
+    const valorPortfolio = await calcularValorTotalPortfolio(oferta.id_inversor);
+
+    res.status(200).json({ message: 'Contraoferta aceptada y guardada en el portfolio con éxito' });
   } catch (err) {
     console.error('Error al aceptar la contraoferta:', err);
     res.status(500).json({ message: 'Error al aceptar la contraoferta' });
   }
 };
+
 
 // Función para rechazar una contraoferta
 export const rejectCounteroffer = async (req, res) => {
