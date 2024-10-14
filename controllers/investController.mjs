@@ -1,5 +1,5 @@
 import prisma from '../lib/prismaClient.mjs';
-import { calcularValoracion, calcularValorTotalPortfolio } from '../lib/functionCalculations.mjs';
+import { actualizarValoresInversiones, calcularValoracion, calcularValorTotalPortfolio } from '../lib/functionCalculations.mjs';
 
 // Función para crear una oferta
 export const offer = async (req, res) => {
@@ -91,8 +91,8 @@ const getPorcentajeDisponible = async (startupId) => {
 
 
 export const offerAccepted = async (req, res) => {
-  const ofertaId = parseInt(req.params.id_oferta); // ID de la oferta
-  const userId = parseInt(req.params.id_usuario); // ID del usuario
+  const ofertaId = parseInt(req.params.id_oferta);
+  const userId = parseInt(req.params.id_usuario);
 
   if (!userId) {
     return res.status(401).json({ message: 'Usuario no autenticado' });
@@ -101,65 +101,51 @@ export const offerAccepted = async (req, res) => {
   try {
     const oferta = await prisma.oferta.findUnique({
       where: { id: ofertaId },
-      include: { startup: true, escrow: true }, // Incluir escrow aquí
+      include: { startup: true, escrow: true },
     });
 
     if (!oferta) {
-      console.log("Oferta no encontrada");
       return res.status(404).json({ message: 'Oferta no encontrada' });
     }
 
     if (oferta.startup.id_usuario !== userId) {
-      console.log("Permiso denegado para aceptar la oferta");
       return res.status(403).json({ message: 'No tienes permiso para aceptar esta oferta' });
     }
 
-    // Obtener el porcentaje disponible de la startup
     const porcentajeDisponible = await getPorcentajeDisponible(oferta.id_startup);
     const porcentajeOfrecido = parseFloat(oferta.porcentaje_ofrecido);
 
-    console.log(`Porcentaje ofrecido: ${porcentajeOfrecido}, Porcentaje disponible: ${porcentajeDisponible}`);
-
     if (porcentajeOfrecido > porcentajeDisponible) {
-      console.log("El porcentaje ofrecido es mayor que el porcentaje disponible");
       return res.status(400).json({ message: 'El porcentaje ofrecido es mayor que el porcentaje disponible' });
     }
 
     if (oferta.estado === 'aceptada' || oferta.estado === 'rechazada') {
-      console.log("Esta oferta ya ha sido aceptada o rechazada");
       return res.status(400).json({ message: 'Esta oferta ya ha sido aceptada o rechazada' });
     }
 
-    let nuevaInversion; // Declarar aquí para acceder después
+    let nuevaInversion;
 
-    // Actualizar la oferta y el estado de escrow
     await prisma.$transaction(async (prisma) => {
-      // Actualizar estado de la oferta a "aceptada"
       await prisma.oferta.update({
         where: { id: ofertaId },
         data: { estado: 'aceptada' },
       });
 
-      // Actualizar estado de escrow
       await prisma.escrow.update({
         where: { id: oferta.escrow_id },
         data: { estado: 'aceptado' },
       });
 
-      // Crear la inversión
       nuevaInversion = await prisma.inversion.create({
         data: {
           id_inversor: oferta.id_inversor,
           id_startup: oferta.id_startup,
           monto_invertido: oferta.monto_ofrecido,
           porcentaje_adquirido: oferta.porcentaje_ofrecido,
-          valor: 0, // Valor a calcular posteriormente
+          valor: 0,
         },
       });
 
-      console.log(`Nueva inversión creada: ${JSON.stringify(nuevaInversion)}`);
-
-      // Asociar la inversión al portfolio del inversor
       await prisma.portfolio.update({
         where: { id_inversor: oferta.id_inversor },
         data: {
@@ -169,7 +155,6 @@ export const offerAccepted = async (req, res) => {
         },
       });
 
-      // Actualizar el porcentaje disponible de la startup
       await prisma.startup.update({
         where: { id: oferta.id_startup },
         data: {
@@ -180,20 +165,18 @@ export const offerAccepted = async (req, res) => {
       });
     });
 
-    // Mover el cálculo y la actualización del valor de la inversión fuera de la transacción
     const valoracion = await calcularValoracion(oferta.id_startup);
-    const valor = (valoracion * (oferta.porcentaje_ofrecido / 100)); // Calcular el valor de la inversión
-
-    console.log(`Valoración calculada: ${valoracion}, Valor de la inversión: ${valor}`);
+    const valor = (valoracion * (oferta.porcentaje_ofrecido / 100));
 
     await prisma.inversion.update({
-      where: { id: nuevaInversion.id }, // Asegúrate de que esta ID sea accesible aquí
-      data: {
-        valor: valor, // Actualizar el valor calculado
-      },
+      where: { id: nuevaInversion.id },
+      data: { valor: valor },
     });
 
-    const valorPortfolio = await calcularValorTotalPortfolio(oferta.id_inversor)
+    // Actualizar todas las inversiones relacionadas
+    const valorActualizado = await actualizarValoresInversiones(oferta.id_startup, valor);
+
+    const valorPortfolio = await calcularValorTotalPortfolio(oferta.id_inversor);
 
     res.status(200).json({ message: 'Oferta aceptada y guardada en el portfolio con éxito' });
   } catch (err) {
@@ -201,6 +184,7 @@ export const offerAccepted = async (req, res) => {
     res.status(500).json({ message: 'Error al aceptar la oferta' });
   }
 };
+
 
 
 // Función para rechazar una oferta
@@ -271,6 +255,10 @@ export const counteroffer = async (req, res) => {
     // Verificar que el usuario que hace la contraoferta es la startup
     if (oferta.startup.id_usuario !== userId) {
       return res.status(403).json({ message: 'No tienes permiso para hacer una contraoferta' });
+    }
+
+    if (oferta.estado === 'aceptada' || oferta.estado === 'rechazada' || oferta.contraoferta_monto !== null || oferta.contraoferta_porcentaje !== null) {
+      return res.status(400).json({ message: 'Esta oferta ya ha sido respondida' });
     }
 
     // Actualizar la oferta con la contraoferta
