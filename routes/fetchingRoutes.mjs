@@ -1,5 +1,5 @@
 import express from 'express';
-import { datosInversor, datosPortfolio, datosStartup, gruposUsuario } from '../controllers/fetchData.mjs';
+import { datosInversor, datosPortfolio, datosStartup, gruposUsuario } from '../controllers/fetchController.mjs';
 
 const router = express.Router();
 

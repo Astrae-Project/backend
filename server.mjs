@@ -8,6 +8,7 @@ import searchingRoutes from './routes/searchingRoutes.mjs';
 import { PrismaClient } from '@prisma/client';
 import { verifyToken } from './middlewares/tokenMiddleware.mjs';
 import fetchingRoutes from './routes/fetchingRoutes.mjs';
+import groupesRoutes from './routes/groupesRoutes.mjs'
 
 // Configuración de variables de entorno
 dotenv.config();
@@ -33,6 +34,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/invest', investRoutes, verifyToken);
 app.use('/api/search', searchingRoutes, verifyToken);
 app.use('/api/data', fetchingRoutes)
+app.use('/api/grupos', groupesRoutes)
 
 // Ruta principal
 app.get('/', (req, res) => {

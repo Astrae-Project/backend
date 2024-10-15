@@ -1,0 +1,33 @@
+import express from 'express';
+import { createGroup, dropGroup, dataGroup, changeData, addMember, dropMember, sendMessage, seeMessage, changeRole } from '../controllers/groupControllers.mjs';
+
+const router = express.Router();
+
+// Crear Grupo
+router.post('/crear', createGroup);
+
+// Salir de Grupo
+router.delete('/salir/:grupoId', dropGroup);
+
+// Cambiar Datos del Grupo
+router.put('/datos/:grupoId', changeData);
+
+// Obtener Información de un Grupo
+router.get('/data/:grupoId', dataGroup);
+
+// Añadir Miembro a un Grupo
+router.post('/añadir/:grupoId/miembros/:usuarioId', addMember);
+
+// Quitar Miembro de un Grupo
+router.delete('/eliminar/:grupoId/miembros/:usuarioId', dropMember);
+
+// Enviar Mensaje en el Grupo
+router.post('/enviar/:grupoId/mensajes', sendMessage);
+
+// Ver Mensajes de un Grupo
+router.get('/ver/:grupoId/mensajes', seeMessage);
+
+// Cambiar Rol de un Miembro
+router.put('/cambio-rol/:grupoId/miembros/:usuarioId', changeRole);
+
+export default router;
