@@ -16,10 +16,10 @@ router.put('/datos/:grupoId', changeData);
 router.get('/data/:grupoId', dataGroup);
 
 // Añadir Miembro a un Grupo
-router.post('/añadir/:grupoId/miembros/:usuarioId', addMember);
+router.post('/añadir/:grupoId/miembro/:usuarioId', addMember);
 
 // Quitar Miembro de un Grupo
-router.delete('/eliminar/:grupoId/miembros/:usuarioId', dropMember);
+router.delete('/eliminar/:grupoId/miembro/:usuarioId', dropMember);
 
 // Enviar Mensaje en el Grupo
 router.post('/enviar/:grupoId/mensajes', sendMessage);

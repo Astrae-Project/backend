@@ -44,18 +44,22 @@ export const registerUser = async (req, res) => {
     // Imprimir el token en la consola
     console.log('Token creado:', accessToken);
 
-    // Guardar los tokens en cookies
-    res.cookie('token', accessToken, {
-      maxAge: 3600000,
-      httpOnly: true,
-      sameSite: 'Strict' // Ajusta según sea necesario
-    });
+      // Guardar los tokens en cookies
+      res.cookie('token', accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 3600000, // 1 hora
+        sameSite: 'Lax' // Mejorar la seguridad
+      });
 
-    res.cookie('refresh-token', refreshToken, {
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      httpOnly: true,
-      sameSite: 'Strict'
-    });
+      // Guardar los tokens en cookies
+      res.cookie('refreshToken', refreshToken, { // Cambiar 'refresh-token' a 'refreshToken'
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+        sameSite: 'Lax' // Mejorar la seguridad
+      });
+
 
     res.status(201).json({ message: 'Usuario registrado con éxito', userId: newUser.id }); // Devuelve userId
   } catch (err) {
@@ -94,14 +98,14 @@ export const loginUser = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: 3600000, // 1 hora
-      sameSite: 'Strict'
+      sameSite: 'Lax'
     });
 
-    res.cookie('refresh-token', refreshToken, {
+    res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
-      sameSite: 'Strict'
+      sameSite: 'Lax'
     });
 
     return res.status(200).json({ message: 'Inicio de sesión exitoso', accessToken, refreshToken });

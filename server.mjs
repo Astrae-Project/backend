@@ -9,6 +9,7 @@ import { PrismaClient } from '@prisma/client';
 import { verifyToken } from './middlewares/tokenMiddleware.mjs';
 import fetchingRoutes from './routes/fetchingRoutes.mjs';
 import groupesRoutes from './routes/groupesRoutes.mjs'
+import profileRoutes from './routes/profileRoutes.mjs'
 
 // Configuración de variables de entorno
 dotenv.config();
@@ -21,10 +22,11 @@ const prisma = new PrismaClient();
 
 // Middleware
 app.use(cors({
-  origin: 'http://localhost:4321', // Asegúrate de poner el origen correcto de tu frontend
-  methods: ['POST', 'GET'],
+  origin: ['http://localhost:4321', 'http://localhost:3000'], // Asegúrate de poner el origen correcto de tu frontend
+  methods: ['POST', 'GET', 'PUT', 'DELETE'],
   credentials: true
 }));
+
 app.use(express.json()); // Parsear JSON
 app.use(cookieParser());
 
@@ -35,6 +37,7 @@ app.use('/api/invest', investRoutes, verifyToken);
 app.use('/api/search', searchingRoutes, verifyToken);
 app.use('/api/data', fetchingRoutes)
 app.use('/api/grupos', groupesRoutes)
+app.use('/api/perfil', profileRoutes)
 
 // Ruta principal
 app.get('/', (req, res) => {
