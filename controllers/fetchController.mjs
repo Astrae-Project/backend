@@ -225,31 +225,30 @@ export async function movimientosRecientes(req, res) {
             return res.status(404).json({ message: 'Inversor no encontrado' });
         }
 
-        // Recuperar inversiones recientes
+        // Recuperar inversiones recientes con el usuario de la startup
         const inversionesRecientes = await prisma.inversion.findMany({
             where: { id_inversor: inversor.id },
             orderBy: { fecha: 'desc' },
-            take: 10, // Limitar a los 10 movimientos más recientes
+            take: 10,
             select: {
                 id: true,
                 monto_invertido: true,
                 fecha: true,
                 startup: {
                     select: {
-                        nombre: true, // Incluir el nombre de la startup
+                        nombre: true,
+                        valoracion: true,
+                        usuario: { // Incluir el usuario de la startup
+                            select: {
+                                avatar: true, // Seleccionar el avatar
+                            },
+                        },
                     },
                 },
-                // Agregar tipo_movimiento como string literal
-                tipo_movimiento: {
-                    select: {
-                        // Asegúrate de que aquí estés utilizando la propiedad correcta
-                        tipo_movimiento: true, // Si este campo existe en el modelo Inversion
-                    }
-                }
             },
         });
 
-        // Recuperar ofertas recientes
+        // Recuperar ofertas recientes con el usuario de la startup
         const ofertasRecientes = await prisma.oferta.findMany({
             where: { id_inversor: inversor.id },
             orderBy: { fecha_creacion: 'desc' },
@@ -261,19 +260,18 @@ export async function movimientosRecientes(req, res) {
                 estado: true,
                 startup: {
                     select: {
-                        nombre: true, // Incluir el nombre de la startup
+                        nombre: true,
+                        usuario: { // Incluir el usuario de la startup
+                            select: {
+                                avatar: true, // Seleccionar el avatar
+                            },
+                        },
                     },
                 },
-                // Agregar tipo_movimiento como string literal
-                tipo_movimiento: {
-                    select: {
-                        tipo_movimiento: true, // Si este campo existe en el modelo Oferta
-                    }
-                }
             },
         });
 
-        // Recuperar eventos recientes
+        // Recuperar eventos recientes con el usuario de la startup
         const eventosRecientes = await prisma.evento.findMany({
             where: { id_inversor: inversor.id },
             orderBy: { fecha_evento: 'desc' },
@@ -283,12 +281,15 @@ export async function movimientosRecientes(req, res) {
                 descripcion: true,
                 fecha_evento: true,
                 tipo_evento: true,
-                // Agregar tipo_movimiento como string literal
-                tipo_movimiento: {
+                startup: {
                     select: {
-                        tipo_movimiento: true, // Si este campo existe en el modelo Evento
-                    }
-                }
+                        usuario: { // Incluir el usuario de la startup
+                            select: {
+                                avatar: true, // Seleccionar el avatar
+                            },
+                        },
+                    },
+                },
             },
         });
 
@@ -296,15 +297,18 @@ export async function movimientosRecientes(req, res) {
         const movimientos = [
             ...inversionesRecientes.map(m => ({
                 ...m,
-                tipo_movimiento: 'inversion' // Agregar un tipo para cada movimiento
+                tipo_movimiento: 'inversion',
+                avatar: m.startup.usuario.avatar, // Agregar el avatar de la startup
             })),
             ...ofertasRecientes.map(m => ({
                 ...m,
-                tipo_movimiento: 'oferta' // Agregar un tipo para cada movimiento
+                tipo_movimiento: 'oferta',
+                avatar: m.startup.usuario.avatar, // Agregar el avatar de la startup
             })),
             ...eventosRecientes.map(m => ({
                 ...m,
-                tipo_movimiento: 'evento' // Agregar un tipo para cada movimiento
+                tipo_movimiento: 'evento',
+                avatar: m.startup.usuario.avatar, // Agregar el avatar de la startup
             })),
         ];
 
