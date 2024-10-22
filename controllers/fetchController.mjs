@@ -30,7 +30,8 @@ export const datosInversor = async (req, res) => {
                     select: {
                         seguidores: true, // Incluye seguidores
                         suscriptores: true, // Incluye suscriptores
-                        fecha_creacion: true
+                        fecha_creacion: true,
+                        avatar: true
                     },
                 },
                 inversiones: {
@@ -149,11 +150,22 @@ export async function datosPortfolio(req, res) {
             include: {
                 inversiones: {
                     include: {
-                        startup: true, // Incluir datos de las startups relacionadas
-                    },
+                        startup: {
+                            select: {
+                                nombre: true,
+                                username: true,
+                                valoracion: true,
+                                usuario: { // Incluir el usuario de la startup
+                                    select: {
+                                        avatar: true, // Seleccionar el avatar
+                                    },
+                                },
+                            },
+                        }
                 },
             },
-        });
+        },
+    })
 
         if (!portfolio) {
             return res.status(404).json({ error: 'Portfolio no encontrado' });
