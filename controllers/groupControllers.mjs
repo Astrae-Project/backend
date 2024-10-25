@@ -21,13 +21,14 @@ export const createGroup = async (req, res) => {
     // Crear el grupo
     const grupo = await prisma.grupo.create({
       data: {
+        id_usuario: userId, // Aquí se asigna el id del creador
         nombre,
         descripcion,
         tipo,
         usuarios: {
           create: {
-            id_usuario: userId,
-            rol: 'administrador' // Asignar al creador como administrador del grupo
+            id_usuario: userId,   // Agregar el usuario creador con rol de administrador
+            rol: 'administrador'  // Asignar al creador como administrador del grupo
           }
         }
       }
@@ -40,7 +41,6 @@ export const createGroup = async (req, res) => {
     res.status(500).json({ message: 'Error al crear el grupo' });
   }
 };
-
 
   export const dropGroup = async (req, res) => {
     try {

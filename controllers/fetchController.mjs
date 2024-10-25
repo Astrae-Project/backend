@@ -133,7 +133,7 @@ export async function datosPortfolio(req, res) {
 
         if (!userId) {
             return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
-        } 
+        }
 
         // Primero, buscar el inversor asociado al usuario
         const inversor = await prisma.inversor.findFirst({
@@ -161,22 +161,43 @@ export async function datosPortfolio(req, res) {
                                     },
                                 },
                             },
-                        }
+                        },
+                    },
                 },
             },
-        },
-    })
+        });
 
         if (!portfolio) {
             return res.status(404).json({ error: 'Portfolio no encontrado' });
         }
 
-        res.json(portfolio);
+        // Calcular el cambio porcentual para cada inversión
+        const inversionesConCambios = portfolio.inversiones.map((inversion) => {
+            const cambioPorcentual = calcularCambioPorcentual(inversion.monto_invertido, inversion.valor);
+            return {
+                ...inversion,
+                cambio_porcentual: cambioPorcentual, // Agregar el cambio porcentual a cada inversión
+            };
+        });
+
+        // Ordenar las inversiones por id (de menor a mayor)
+        inversionesConCambios.sort((a, b) => a.id - b.id);
+
+        // Devolver el portfolio con inversiones y cambios porcentuales
+        res.json({
+            ...portfolio,
+            inversiones: inversionesConCambios,
+        });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Error al recuperar datos del portfolio' });
     }
 }
+
+// Función para calcular el cambio porcentual de una inversión
+const calcularCambioPorcentual = (montoInvertido, valorActual) => {
+    return ((valorActual - montoInvertido) / montoInvertido) * 100; // Retorna el cambio porcentual
+};
 
 
 export async function gruposUsuario(req, res) {
@@ -245,6 +266,7 @@ export async function movimientosRecientes(req, res) {
             select: {
                 id: true,
                 monto_invertido: true,
+                porcentaje_adquirido: true,
                 fecha: true,
                 startup: {
                     select: {
@@ -268,6 +290,7 @@ export async function movimientosRecientes(req, res) {
             select: {
                 id: true,
                 monto_ofrecido: true,
+                porcentaje_ofrecido: true,
                 fecha_creacion: true,
                 estado: true,
                 startup: {
