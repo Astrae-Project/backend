@@ -10,6 +10,7 @@ import { verifyToken } from './middlewares/tokenMiddleware.mjs';
 import fetchingRoutes from './routes/fetchingRoutes.mjs';
 import groupesRoutes from './routes/groupesRoutes.mjs'
 import profileRoutes from './routes/profileRoutes.mjs'
+import eventRoutes from './routes/eventRoutes.mjs'
 
 // Configuración de variables de entorno
 dotenv.config();
@@ -38,6 +39,7 @@ app.use('/api/search', searchingRoutes, verifyToken);
 app.use('/api/data', fetchingRoutes)
 app.use('/api/grupos', groupesRoutes)
 app.use('/api/perfil', profileRoutes)
+app.use('/api/event', eventRoutes)
 
 // Ruta principal
 app.get('/', (req, res) => {

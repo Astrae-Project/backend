@@ -8,25 +8,28 @@ generator client {
 }
 
 model Usuario {
-  id                 Int            @id @default(autoincrement())
-  email              String         @unique
-  password           String
-  rol                Rol? // Relación opcional con el rol de inversor o startup
-  inversores         Inversor[] // Relación inversores
-  startups           Startup[] // Relación startups
-  fecha_creacion     DateTime       @default(now())
-  seguidores         Seguimiento[]  @relation("seguidores")
-  seguidos           Seguimiento[]  @relation("seguidos")
-  suscriptores       Suscripcion[]  @relation("suscriptores")
-  suscritos          Suscripcion[]  @relation("suscritos")
-  notificaciones     Notificacion[]
-  mensajes_enviados  Mensaje[]      @relation("enviados")
-  mensajes_recibidos Mensaje[]      @relation("recibidos")
-  verificado         Boolean        @default(false)
-  grupos             GrupoUsuario[] // Relación con GrupoUsuario para la tabla intermedia
-  eventos            Evento[] // Relación con los eventos
-  avatar             String? // URL de la foto de perfil
-  Contacto           Contacto[]
+  id                  Int                  @id @default(autoincrement())
+  email               String               @unique
+  password            String
+  rol                 Rol? // Relación opcional con el rol de inversor o startup
+  inversores          Inversor[] // Relación inversores
+  startups            Startup[] // Relación startups
+  fecha_creacion      DateTime             @default(now())
+  seguidores          Seguimiento[]        @relation("seguidores")
+  seguidos            Seguimiento[]        @relation("seguidos")
+  suscriptores        Suscripcion[]        @relation("suscriptores")
+  suscritos           Suscripcion[]        @relation("suscritos")
+  notificaciones      Notificacion[]
+  mensajes_enviados   Mensaje[]            @relation("enviados")
+  mensajes_recibidos  Mensaje[]            @relation("recibidos")
+  verificado          Boolean              @default(false)
+  grupos              GrupoUsuario[] // Relación con GrupoUsuario para la tabla intermedia
+  avatar              String? // URL de la foto de perfil
+  pais                String?
+  ciudad              String?
+  Contacto            Contacto[]
+  eventosCreados      Evento[]             @relation("CreadorEventos") // Relación con eventos creados por el usuario
+  eventosParticipados EventoParticipante[] @relation("ParticipacionesEventos")
 }
 
 model Inversor {
@@ -39,7 +42,7 @@ model Inversor {
   usuario          Usuario     @relation(fields: [id_usuario], references: [id])
   portfolio        Portfolio? // Relación con portafolio
   ofertas          Oferta[] // Relación con ofertas hechas
-  eventos          Evento[] // Relación con eventos asociados
+  resenas          Resena[] // Relación con las reseñas recibidas
 }
 
 model Startup {
@@ -56,7 +59,7 @@ model Startup {
   ofertas               Oferta[] // Relación con las ofertas recibidas
   usuario               Usuario     @relation(fields: [id_usuario], references: [id], onDelete: NoAction, onUpdate: NoAction)
   chatbots              Chatbot[] // Relación con los chatbots
-  eventos               Evento[] // Relación con eventos asociados
+  resenas               Resena[]
 }
 
 model Inversion {
@@ -175,26 +178,33 @@ model GrupoUsuario {
   id_grupo   Int
   id_usuario Int
   rol        RolGrupo @default(miembro) // Nuevo campo para el rol del usuario en el grupo
-
-  // Relación con usuario y grupo
-  usuario Usuario @relation(fields: [id_usuario], references: [id])
-  grupo   Grupo   @relation(fields: [id_grupo], references: [id])
+  usuario    Usuario  @relation(fields: [id_usuario], references: [id])
+  grupo      Grupo    @relation(fields: [id_grupo], references: [id])
 
   @@unique([id_grupo, id_usuario]) // Evita duplicar la relación de un usuario en un grupo
 }
 
 model Evento {
-  id              Int            @id @default(autoincrement())
-  id_usuario      Int?
-  id_inversor     Int?
-  id_startup      Int?
-  tipo_evento     String         @db.VarChar(255)
-  descripcion     String         @db.VarChar(255)
-  fecha_evento    DateTime       @default(now())
-  usuario         Usuario?       @relation(fields: [id_usuario], references: [id])
-  inversor        Inversor?      @relation(fields: [id_inversor], references: [id])
-  startup         Startup?       @relation(fields: [id_startup], references: [id])
-  tipo_movimiento TipoMovimiento @default(evento) // Usar el enum aquí
+  id              Int                  @id @default(autoincrement())
+  id_usuario      Int
+  titulo          String               @db.VarChar(255)
+  tipo            Tipo
+  descripcion     String               @db.VarChar(255)
+  fecha_evento    DateTime             @default(now())
+  creador         Usuario              @relation("CreadorEventos", fields: [id_usuario], references: [id]) // Relación con el creador del evento
+  participantes   EventoParticipante[] // Relación con participantes a través de EventoParticipante
+  tipo_movimiento TipoMovimiento       @default(evento) // Usar el enum aquí
+}
+
+model EventoParticipante {
+  id          Int      @id @default(autoincrement())
+  id_evento   Int
+  id_usuario  Int
+  fecha_union DateTime @default(now())
+  usuario     Usuario  @relation("ParticipacionesEventos", fields: [id_usuario], references: [id]) // Relación única con Usuario
+  evento      Evento   @relation(fields: [id_evento], references: [id])
+
+  @@unique([id_evento, id_usuario]) // Evita duplicaciones de participación
 }
 
 model Chatbot {
@@ -217,6 +227,20 @@ model Contacto {
 
   // Relación con el modelo Usuario
   usuario Usuario @relation(fields: [id_usuario], references: [id])
+}
+
+model Resena {
+  id          Int      @id @default(autoincrement())
+  id_inversor Int // ID del inversor reseñado
+  id_startup  Int // ID de la startup que crea la reseña
+  puntuacion  Decimal  @default(0) @db.Decimal(12, 2)
+  comentario  String?  @db.Text // Comentario opcional
+  fecha       DateTime @default(now())
+
+  inversor Inversor @relation(fields: [id_inversor], references: [id])
+  startup  Startup  @relation(fields: [id_startup], references: [id])
+
+  @@map("reseñas") // Nombre de la tabla en la base de datos  
 }
 
 enum TipoMovimiento {

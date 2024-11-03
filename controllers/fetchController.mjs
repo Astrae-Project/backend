@@ -1,6 +1,8 @@
 import prisma from "../lib/prismaClient.mjs"; 
-import jwt from 'jsonwebtoken'; 
+import jwt from 'jsonwebtoken';
+import { calcularROI } from "../lib/functionCalculations.mjs";
 
+// Controlador para obtener datos del inversor
 export const datosInversor = async (req, res) => {
     const token = req.cookies.token;
 
@@ -22,24 +24,27 @@ export const datosInversor = async (req, res) => {
             return res.status(401).json({ message: 'El usuario no es un inversor' });
         }
 
-        // Recuperar datos del inversor incluyendo seguidores, suscriptores e inversiones
+        // Recuperar datos del inversor
         const inversor = await prisma.inversor.findFirst({
             where: { id_usuario: userId },
             include: {
                 usuario: {
                     select: {
-                        seguidores: true, // Incluye seguidores
-                        suscriptores: true, // Incluye suscriptores
+                        seguidores: true,
+                        suscriptores: true,
                         fecha_creacion: true,
-                        avatar: true
+                        avatar: true,
+                        pais: true,
+                        ciudad: true,
                     },
                 },
                 inversiones: {
                     include: {
-                        startup: true, // Incluir datos de la startup relacionada
+                        startup: true, // Para obtener el sector y valor de cada startup
                     },
                 },
                 portfolio: true,
+                resenas: true
             },
         });
 
@@ -47,12 +52,73 @@ export const datosInversor = async (req, res) => {
             return res.status(404).json({ message: 'Inversor no encontrado' });
         }
 
+        // Calcular el sector favorito basado en las inversiones
+        const sectores = inversor.inversiones.reduce((acc, inv) => {
+            const sector = inv.startup.sector;
+            acc[sector] = (acc[sector] || 0) + 1;
+            return acc;
+        }, {});
+
+        // Obtener el sector con más inversiones
+        const sectorFavorito = Object.keys(sectores).reduce((a, b) => (sectores[a] > sectores[b] ? a : b), "Desconocido");
+
+        // Añadir el sector favorito al objeto inversor
+        inversor.sector_favorito = sectorFavorito;
+
+        // Inicializar variables para el cálculo del ROI
+        let totalROI = 0;
+        let countROI = 0;
+
+        // Calcular si cada inversión es exitosa y el ROI
+        inversor.inversiones = inversor.inversiones.map((inversion) => {
+            // Asegurarse de que estos valores sean numéricos
+            const montoInvertido = Number(inversion.monto_invertido);
+            const valorInversion = Number(inversion.valor);
+
+            // Comprobar si los valores se han convertido correctamente
+            if (isNaN(montoInvertido) || isNaN(valorInversion)) {
+                console.error(`Inversión ID ${inversion.id}: Monto Invertido (${inversion.monto_invertido}), Valor (${inversion.valor}) no son números.`);
+                return {
+                    ...inversion,
+                    esExitosa: false,
+                    roi: null, // O puedes usar 0 o algún valor por defecto
+                };
+            }
+
+            // Verificar si la inversión es exitosa
+            const esExitosa = montoInvertido < valorInversion;
+
+            // Calcular el ROI usando la función externa
+            const roi = calcularROI(montoInvertido, valorInversion);
+
+            // Sumar al total del ROI y aumentar el conteo solo si se ha invertido dinero
+            if (montoInvertido > 0) {
+                totalROI += roi;
+                countROI++;
+            }
+
+            return {
+                ...inversion,
+                esExitosa,
+                roi, // Añadir el ROI a la inversión
+            };
+        });
+
+        // Calcular puntuación media
+        const totalPuntuacion = inversor.resenas.reduce((acc, resena) => acc + parseFloat(resena.puntuacion), 0);
+        const puntuacionMedia = inversor.resenas.length > 0 ? totalPuntuacion / inversor.resenas.length : 0;
+        
+        // Calcular el ROI promedio
+        const roiPromedio = countROI > 0 ? totalROI / countROI : 0;
+
         // Enviar los datos al cliente
         res.json({
             inversor,
-            seguidores: inversor.usuario.seguidores.length, // Número de seguidores
-            suscriptores: inversor.usuario.suscriptores.length, // Número de suscriptores
-            inversionesRealizadas: inversor.inversiones.length, // Número de inversiones
+            seguidores: inversor.usuario.seguidores.length,
+            suscriptores: inversor.usuario.suscriptores.length,
+            inversionesRealizadas: inversor.inversiones.length,
+            roiPromedio: roiPromedio.toFixed(2), // Incluye el ROI promedio
+            puntuacionMedia: puntuacionMedia.toFixed(2),
         });
     } catch (error) {
         console.error(error);
