@@ -1,18 +1,18 @@
 import express from 'express';
-import { changeEvent, createEvent, dataEvent, dropEvent } from '../controllers/eventControllers.mjs';
+import { changeEvent, createEvent, dataEvent, desapuntarseEvento, dropEvent, inscribirEvento } from '../controllers/eventControllers.mjs';
 
 const router = express.Router();
 
-// Crear Grupo
 router.post('/crear', createEvent);
 
-// Salir de Grupo
-router.delete('/eliminar', dropEvent);
+router.delete('/eliminar/:eventoId', dropEvent);
 
-// Cambiar Datos del Grupo
 router.put('/datos/:eventoId', changeEvent);
 
-// Obtener Información de un Grupo
 router.get('/data/:eventoId', dataEvent);
+
+router.post('/entrar/:eventoId', inscribirEvento);
+
+router.delete('/salir/:eventoId', desapuntarseEvento);
 
 export default router;

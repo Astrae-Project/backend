@@ -29,7 +29,7 @@ model Usuario {
   ciudad              String?
   Contacto            Contacto[]
   eventosCreados      Evento[]             @relation("CreadorEventos") // Relación con eventos creados por el usuario
-  eventosParticipados EventoParticipante[] @relation("ParticipacionesEventos")
+  eventosParticipados Participante[] @relation("ParticipacionesEventos")
 }
 
 model Inversor {
@@ -192,11 +192,11 @@ model Evento {
   descripcion     String               @db.VarChar(255)
   fecha_evento    DateTime             @default(now())
   creador         Usuario              @relation("CreadorEventos", fields: [id_usuario], references: [id]) // Relación con el creador del evento
-  participantes   EventoParticipante[] // Relación con participantes a través de EventoParticipante
+  participantes   Participante[] // Relación con participantes a través de EventoParticipante
   tipo_movimiento TipoMovimiento       @default(evento) // Usar el enum aquí
 }
 
-model EventoParticipante {
+model Participante {
   id          Int      @id @default(autoincrement())
   id_evento   Int
   id_usuario  Int
