@@ -5,11 +5,11 @@ import jwt from 'jsonwebtoken';
 const prisma = new PrismaClient();
 
 export const registerUser = async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, username } = req.body;
 
-  if (!email || !password) {
+  if (!email || !password || !username) {
     console.log('Faltan datos:', { email, password });
-    return res.status(400).json({ message: 'Por favor, envía email y contraseña' });
+    return res.status(400).json({ message: 'Faltan campos requeridos' });
   }
 
   try {
@@ -31,6 +31,7 @@ export const registerUser = async (req, res) => {
       data: {
         email,
         password: hashedPassword,
+        username
       }
     });
 

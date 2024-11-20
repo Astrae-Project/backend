@@ -175,6 +175,8 @@ export const offerAccepted = async (req, res) => {
 
     // Actualizar todas las inversiones relacionadas con la startup
     await actualizarValoresInversiones(oferta.id_startup, valoracion);
+    
+    const valorPortfolio = await calcularValorTotalPortfolio(oferta.id_inversor);
 
     res.status(200).json({ message: 'Oferta aceptada y guardada en el portfolio con éxito' });
   } catch (err) {

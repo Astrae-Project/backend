@@ -136,14 +136,7 @@ export const dataEvent = async (req, res) => {
       }));
   
       // Determinamos el tipo y el username del creador basado en su rol
-      let creadorUsername;
-      if (evento.creador.startups.length > 0) {
-        // Si el creador es una startup
-        creadorUsername = evento.creador.startups[0].username; // Asumiendo que hay solo un username
-      } else if (evento.creador.inversores.length > 0) {
-        // Si el creador es un inversor
-        creadorUsername = evento.creador.inversores[0].username; // Asumiendo que hay solo un username
-      }
+      let creadorUsername = evento.creador.usuario.username; // Asumiendo que hay solo un username
   
       // Respuesta con la información del evento y sus participantes
       return res.status(200).json({

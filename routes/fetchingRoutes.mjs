@@ -1,5 +1,5 @@
 import express from 'express';
-import { datosInversor, datosPortfolio, datosStartup, gruposUsuario, movimientosRecientes, obtenerContacto, obtenerEventos } from '../controllers/fetchController.mjs';
+import { datosInversor, datosPortfolio, datosStartup, gruposUsuario, movimientosRecientes, obtenerContacto, obtenerEventos, startupsAleatorias } from '../controllers/fetchController.mjs';
 
 const router = express.Router();
 
@@ -8,6 +8,8 @@ router.get('/inversor', datosInversor);
 router.get('/portfolio', datosPortfolio);
 
 router.get('/startup', datosStartup);
+
+router.get('/startup/recomendadas', startupsAleatorias);
 
 router.get('/grupos', gruposUsuario);
 

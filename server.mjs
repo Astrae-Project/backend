@@ -39,7 +39,7 @@ app.use('/api/search', searchingRoutes, verifyToken);
 app.use('/api/data', fetchingRoutes)
 app.use('/api/grupos', groupesRoutes)
 app.use('/api/perfil', profileRoutes)
-app.use('/api/event', eventRoutes)
+app.use('/api/evento', eventRoutes)
 
 // Ruta principal
 app.get('/', (req, res) => {

@@ -34,16 +34,28 @@ export const selectRole = async (req, res) => {
 
 
 export const investorRole = async (req, res) => {
-  const userId = parseInt(req.params.id, 10);
-  const { nombre_inversor, perfil_inversion, usuario } = req.body;
+  const { nombre_inversor, perfil_inversion, ciudad, pais } = req.body;
+  
 
   // Validar campos requeridos
-  if (!nombre_inversor || !perfil_inversion || !usuario) {
+  if (!nombre_inversor || !perfil_inversion || !ciudad || !pais) {
     return res.status(400).json({ message: 'Faltan campos requeridos' });
   }
 
   try {
-    // Verificar si el usuario existe
+    const token = req.cookies.token;
+
+    if (!token) {
+      return res.status(401).json({ message: 'Token no proporcionado' });
+    }
+
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decodedToken.userId;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
+    }
+
     const user = await prisma.usuario.findUnique({
       where: { id: userId }
     });
@@ -58,7 +70,6 @@ export const investorRole = async (req, res) => {
         id_usuario: userId,
         nombre: nombre_inversor,
         perfil_inversion: perfil_inversion,
-        username: usuario // Asegúrate de que esta columna existe en la base de datos
       }
     });
 
@@ -72,6 +83,14 @@ export const investorRole = async (req, res) => {
       }
     });
 
+    await prisma.usuario.update({
+      where: { id: userId },
+      data: {
+        ciudad: ciudad,
+        pais: pais,
+      }
+    });
+
     res.status(201).json({ message: 'Inversor y portafolio creados con éxito', inversorId: newInversor.id });
   } catch (err) {
     console.error('Error al completar el perfil del inversor:', err.message);
@@ -81,11 +100,10 @@ export const investorRole = async (req, res) => {
 };
 
 export const startupRole = async (req, res) => {
-  const userId = parseInt(req.params.id, 10);
-  const { nombre_startup, usuario, sector, porcentaje, estado_financiacion, plantilla } = req.body;
+  const { nombre_startup, sector, porcentaje, estado_financiacion, plantilla, ciudad, pais } = req.body;
 
   // Validar los campos obligatorios
-  if (!nombre_startup || !usuario || !sector || porcentaje < 0 || porcentaje > 100 || !estado_financiacion || plantilla < 0) {
+  if (!nombre_startup || !sector || porcentaje < 0 || porcentaje > 100 || !estado_financiacion || plantilla < 0 || !ciudad || !pais) {
     return res.status(400).json({ message: 'Faltan campos requeridos o campos inválidos' });
   }
 
@@ -99,7 +117,19 @@ export const startupRole = async (req, res) => {
   }
 
   try {
-    // Verificar si el usuario existe
+    const token = req.cookies.token;
+
+    if (!token) {
+      return res.status(401).json({ message: 'Token no proporcionado' });
+    }
+
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decodedToken.userId;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
+    }
+
     const user = await prisma.usuario.findUnique({
       where: { id: userId }
     });
@@ -112,11 +142,18 @@ export const startupRole = async (req, res) => {
       data: {
         id_usuario: userId,
         nombre: nombre_startup,
-        username: usuario,
         sector: sector,
         estado_financiacion: estado_financiacion,
         plantilla: plantillaInt, // Usa el valor convertido aquí
         porcentaje_disponible: porcentajeInt // Y aquí
+      }
+    });
+
+    await prisma.usuario.update({
+      where: { id: userId },
+      data: {
+        ciudad: ciudad,
+        pais: pais,
       }
     });
 

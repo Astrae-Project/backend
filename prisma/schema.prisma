@@ -1,64 +1,63 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
 model Usuario {
-  id                  Int                  @id @default(autoincrement())
-  email               String               @unique
+  id                  Int            @id @default(autoincrement())
+  email               String         @unique
   password            String
-  rol                 Rol? // Relación opcional con el rol de inversor o startup
-  inversores          Inversor[] // Relación inversores
-  startups            Startup[] // Relación startups
-  fecha_creacion      DateTime             @default(now())
-  seguidores          Seguimiento[]        @relation("seguidores")
-  seguidos            Seguimiento[]        @relation("seguidos")
-  suscriptores        Suscripcion[]        @relation("suscriptores")
-  suscritos           Suscripcion[]        @relation("suscritos")
-  notificaciones      Notificacion[]
-  mensajes_enviados   Mensaje[]            @relation("enviados")
-  mensajes_recibidos  Mensaje[]            @relation("recibidos")
-  verificado          Boolean              @default(false)
-  grupos              GrupoUsuario[] // Relación con GrupoUsuario para la tabla intermedia
-  avatar              String? // URL de la foto de perfil
-  pais                String?
+  rol                 Rol?
+  verificado          Boolean        @default(false)
+  fecha_creacion      DateTime       @default(now())
+  avatar              String?
   ciudad              String?
+  pais                String?
+  username            String         @unique @db.VarChar(255)
   Contacto            Contacto[]
-  eventosCreados      Evento[]             @relation("CreadorEventos") // Relación con eventos creados por el usuario
+  eventosCreados      Evento[]       @relation("CreadorEventos")
+  grupos              GrupoUsuario[]
+  inversores          Inversor[]
+  mensajes_enviados   Mensaje[]      @relation("enviados")
+  mensajes_recibidos  Mensaje[]      @relation("recibidos")
+  notificaciones      Notificacion[]
   eventosParticipados Participante[] @relation("ParticipacionesEventos")
+  seguidos            Seguimiento[]  @relation("seguidos")
+  seguidores          Seguimiento[]  @relation("seguidores")
+  startups            Startup[]
+  suscriptores        Suscripcion[]  @relation("suscriptores")
+  suscritos           Suscripcion[]  @relation("suscritos")
 }
 
 model Inversor {
   id               Int         @id @default(autoincrement())
   id_usuario       Int
   nombre           String      @db.VarChar(255)
-  username         String      @unique @db.VarChar(255)
   perfil_inversion String
-  inversiones      Inversion[] // Relación con inversiones realizadas
+  inversiones      Inversion[]
   usuario          Usuario     @relation(fields: [id_usuario], references: [id])
-  portfolio        Portfolio? // Relación con portafolio
-  ofertas          Oferta[] // Relación con ofertas hechas
-  resenas          Resena[] // Relación con las reseñas recibidas
+  ofertas          Oferta[]
+  portfolio        Portfolio?
+  resenas          Resena[]
 }
 
 model Startup {
   id                    Int         @id @default(autoincrement())
   id_usuario            Int
   nombre                String      @db.VarChar(255)
-  username              String      @unique @db.VarChar(255)
   sector                String      @db.VarChar(255)
   estado_financiacion   String      @db.VarChar(255)
   plantilla             Int?
   porcentaje_disponible Decimal     @default(100) @db.Decimal(5, 2)
   valoracion            Decimal?    @db.Decimal(12, 2)
-  inversiones           Inversion[] // Relación con las inversiones
-  ofertas               Oferta[] // Relación con las ofertas recibidas
+  chatbots              Chatbot[]
+  inversiones           Inversion[]
+  ofertas               Oferta[]
   usuario               Usuario     @relation(fields: [id_usuario], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  chatbots              Chatbot[] // Relación con los chatbots
   resenas               Resena[]
 }
 
@@ -67,15 +66,15 @@ model Inversion {
   id_inversor          Int
   id_startup           Int
   monto_invertido      Decimal        @db.Decimal(12, 2)
-  valor                Decimal        @default(0) @db.Decimal(12, 2)
   porcentaje_adquirido Decimal        @db.Decimal(5, 2)
   fecha                DateTime       @default(now()) @db.Timestamp(6)
+  portfolioId          Int?
+  valor                Decimal        @default(0) @db.Decimal(12, 2)
+  tipo_movimiento      TipoMovimiento @default(inversion)
+  Ingreso              Ingreso[]
   inversor             Inversor       @relation(fields: [id_inversor], references: [id])
   startup              Startup        @relation(fields: [id_startup], references: [id])
   Portfolio            Portfolio?     @relation(fields: [portfolioId], references: [id])
-  portfolioId          Int?
-  Ingreso              Ingreso[] // Relación con ingresos generados por la inversión
-  tipo_movimiento      TipoMovimiento @default(inversion) // Usar el enum aquí
 }
 
 model Oferta {
@@ -89,19 +88,19 @@ model Oferta {
   contraoferta_monto      Decimal?       @db.Decimal(12, 2)
   contraoferta_porcentaje Decimal?       @db.Decimal(5, 2)
   fecha_creacion          DateTime       @default(now())
+  tipo_movimiento         TipoMovimiento @default(oferta)
+  escrow                  Escrow[]
   inversor                Inversor       @relation(fields: [id_inversor], references: [id])
   startup                 Startup        @relation(fields: [id_startup], references: [id])
-  escrow                  Escrow[] // Relación con escrow
-  tipo_movimiento         TipoMovimiento @default(oferta) // Usar el enum aquí
 }
 
 model Portfolio {
   id             Int         @id @default(autoincrement())
   id_inversor    Int         @unique
-  inversor       Inversor    @relation(fields: [id_inversor], references: [id])
   fecha_creacion DateTime    @default(now())
-  inversiones    Inversion[]
   valor_total    Decimal     @default(0) @db.Decimal(12, 2)
+  inversiones    Inversion[]
+  inversor       Inversor    @relation(fields: [id_inversor], references: [id])
 }
 
 model Escrow {
@@ -136,8 +135,8 @@ model Seguimiento {
   id_seguidor  Int
   id_seguido   Int
   fecha_inicio DateTime @default(now())
-  seguidor     Usuario  @relation("seguidores", fields: [id_seguidor], references: [id])
   seguido      Usuario  @relation("seguidos", fields: [id_seguido], references: [id])
+  seguidor     Usuario  @relation("seguidores", fields: [id_seguidor], references: [id])
 }
 
 model Notificacion {
@@ -151,49 +150,50 @@ model Notificacion {
 
 model Mensaje {
   id          Int      @id @default(autoincrement())
-  contenido   String   @db.Text
+  contenido   String
   id_emisor   Int
   id_receptor Int
-  id_grupo    Int?
   fecha_envio DateTime @default(now())
+  id_grupo    Int?
   emisor      Usuario  @relation("enviados", fields: [id_emisor], references: [id])
-  receptor    Usuario  @relation("recibidos", fields: [id_receptor], references: [id])
   grupo       Grupo?   @relation(fields: [id_grupo], references: [id])
+  receptor    Usuario  @relation("recibidos", fields: [id_receptor], references: [id])
 }
 
 model Grupo {
   id             Int            @id @default(autoincrement())
-  id_usuario     Int
   nombre         String         @db.VarChar(255)
   descripcion    String         @db.VarChar(255)
   tipo           Tipo           @default(publico)
   fecha_creacion DateTime       @default(now())
-  usuarios       GrupoUsuario[] // Relación con usuarios y sus roles en el grupo
-  mensajes       Mensaje[] // Relación con mensajes enviados
   foto_grupo     String?
+  id_usuario     Int
+  usuarios       GrupoUsuario[]
+  mensajes       Mensaje[]
 }
 
 model GrupoUsuario {
   id         Int      @id @default(autoincrement())
   id_grupo   Int
   id_usuario Int
-  rol        RolGrupo @default(miembro) // Nuevo campo para el rol del usuario en el grupo
-  usuario    Usuario  @relation(fields: [id_usuario], references: [id])
+  rol        RolGrupo @default(miembro)
   grupo      Grupo    @relation(fields: [id_grupo], references: [id])
+  usuario    Usuario  @relation(fields: [id_usuario], references: [id])
 
-  @@unique([id_grupo, id_usuario]) // Evita duplicar la relación de un usuario en un grupo
+  @@unique([id_grupo, id_usuario])
 }
 
 model Evento {
-  id              Int                  @id @default(autoincrement())
+  id              Int            @id @default(autoincrement())
   id_usuario      Int
-  titulo          String               @db.VarChar(255)
+  descripcion     String         @db.VarChar(255)
+  fecha_evento    DateTime       @default(now())
+  tipo_movimiento TipoMovimiento @default(evento)
+  titulo          String         @db.VarChar(255)
   tipo            Tipo
-  descripcion     String               @db.VarChar(255)
-  fecha_evento    DateTime             @default(now())
-  creador         Usuario              @relation("CreadorEventos", fields: [id_usuario], references: [id]) // Relación con el creador del evento
-  participantes   Participante[] // Relación con participantes a través de EventoParticipante
-  tipo_movimiento TipoMovimiento       @default(evento) // Usar el enum aquí
+  fecha_creacion  DateTime       @default(now())
+  creador         Usuario        @relation("CreadorEventos", fields: [id_usuario], references: [id])
+  participantes   Participante[]
 }
 
 model Participante {
@@ -201,46 +201,43 @@ model Participante {
   id_evento   Int
   id_usuario  Int
   fecha_union DateTime @default(now())
-  usuario     Usuario  @relation("ParticipacionesEventos", fields: [id_usuario], references: [id]) // Relación única con Usuario
   evento      Evento   @relation(fields: [id_evento], references: [id])
+  usuario     Usuario  @relation("ParticipacionesEventos", fields: [id_usuario], references: [id])
 
-  @@unique([id_evento, id_usuario]) // Evita duplicaciones de participación
+  @@unique([id_evento, id_usuario])
 }
 
 model Chatbot {
   id            Int     @id @default(autoincrement())
-  id_startup    Int // Relación con startups
+  id_startup    Int
   nombre        String  @db.VarChar(255)
-  configuracion Json // Configuración específica del chatbot
+  configuracion Json
   startup       Startup @relation(fields: [id_startup], references: [id], onDelete: Cascade)
 }
 
 model Contacto {
   id         Int     @id @default(autoincrement())
-  id_usuario Int // Relación con el usuario
+  id_usuario Int
   correo     String? @unique
   twitter    String?
   linkedin   String?
   facebook   String?
   instagram  String?
   otros      String?
-
-  // Relación con el modelo Usuario
-  usuario Usuario @relation(fields: [id_usuario], references: [id])
+  usuario    Usuario @relation(fields: [id_usuario], references: [id])
 }
 
 model Resena {
   id          Int      @id @default(autoincrement())
-  id_inversor Int // ID del inversor reseñado
-  id_startup  Int // ID de la startup que crea la reseña
+  id_inversor Int
+  id_startup  Int
   puntuacion  Decimal  @default(0) @db.Decimal(12, 2)
-  comentario  String?  @db.Text // Comentario opcional
+  comentario  String?
   fecha       DateTime @default(now())
+  inversor    Inversor @relation(fields: [id_inversor], references: [id])
+  startup     Startup  @relation(fields: [id_startup], references: [id])
 
-  inversor Inversor @relation(fields: [id_inversor], references: [id])
-  startup  Startup  @relation(fields: [id_startup], references: [id])
-
-  @@map("reseñas") // Nombre de la tabla en la base de datos  
+  @@map("reseñas")
 }
 
 enum TipoMovimiento {

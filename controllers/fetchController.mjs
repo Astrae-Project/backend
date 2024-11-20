@@ -30,6 +30,7 @@ export const datosInversor = async (req, res) => {
             include: {
                 usuario: {
                     select: {
+                        username: true,
                         seguidores: true,
                         suscriptores: true,
                         fecha_creacion: true,
@@ -154,6 +155,7 @@ export const datosStartup = async (req, res) => {
                 usuario: {
                     select: {
                         seguidores: true, // Incluye seguidores
+                        username: true
                     },
                 },
                 inversiones: {
@@ -186,6 +188,102 @@ export const datosStartup = async (req, res) => {
     }
 };
 
+export const startupsAleatorias = async (req, res) => {
+    try {
+      // Obtener startups aleatorias
+      const startups = await prisma.startup.findMany({
+        take: 10, // Número de startups aleatorias a devolver
+        orderBy: {
+          // Puedes añadir lógica de orden aquí si lo necesitas
+          id: 'desc', // Solo un ejemplo de orden
+        },
+
+        include: {
+            usuario: {
+                select: {
+                    username: true,
+                    avatar: true
+                },
+            },
+            inversiones: {
+                include: {
+                    inversor: true, // Incluir datos de los inversores
+                },
+            },
+        },
+
+      });
+  
+      if (!startups || startups.length === 0) {
+        return res.status(404).json({ message: 'No se encontraron startups aleatorias' });
+      }
+  
+      // Devolver las startups aleatorias
+      res.json({ startups });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Error al recuperar las startups aleatorias' });
+    }
+  };
+
+  export const startupsSeguidas = async (req, res) => {
+    try {
+        const token = req.cookies.token;
+
+        if (!token) {
+            return res.status(402).json({ message: 'Token no proporcionado' });
+        }
+
+        const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+        const userId = decodedToken.userId;
+
+        if (!userId) {
+            return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
+        }
+    
+      // Obtener startups seguidas por el usuario
+      const startups = await prisma.startup.findMany({
+        where: {
+          usuario: {
+            seguidos: {
+              some: {
+                seguidor: { id: userId }, // Filtrar por los usuarios seguidos por el usuario actual
+              },
+            },
+          },
+        },
+        take: 10, // Limitar el número de resultados
+        orderBy: {
+          id: 'desc', // Ordenar según tus necesidades
+        },
+        include: {
+          usuario: {
+            select: {
+              username: true,
+              avatar: true,
+            },
+          },
+          inversiones: {
+            include: {
+              inversor: true, // Incluir datos de los inversores
+            },
+          },
+        },
+      });
+  
+      if (!startups || startups.length === 0) {
+        return res.status(404).json({ message: 'No se encontraron startups seguidas' });
+      }
+  
+      // Devolver las startups seguidas
+      res.json({ startups });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Error al recuperar las startups seguidas' });
+    }
+  };
+  
+
 export async function datosPortfolio(req, res) {
     const token = req.cookies.token;
 
@@ -211,7 +309,7 @@ export async function datosPortfolio(req, res) {
         }
 
         // Luego, buscar el portfolio asociado al inversor
-        const portfolio = await prisma.portfolio.findUnique({
+        const portfolio = await prisma.portfolio.findFirst({
             where: { id_inversor: inversor.id }, // Usa el id del inversor
             include: {
                 inversiones: {
@@ -219,11 +317,11 @@ export async function datosPortfolio(req, res) {
                         startup: {
                             select: {
                                 nombre: true,
-                                username: true,
                                 valoracion: true,
                                 usuario: { // Incluir el usuario de la startup
                                     select: {
                                         avatar: true, // Seleccionar el avatar
+                                        username: true,
                                     },
                                 },
                             },
@@ -338,9 +436,10 @@ export async function movimientosRecientes(req, res) {
                     select: {
                         nombre: true,
                         valoracion: true,
-                        usuario: { // Incluir el usuario de la startup
+                        usuario: {
                             select: {
-                                avatar: true, // Seleccionar el avatar
+                                username: true,
+                                avatar: true,
                             },
                         },
                     },
@@ -362,9 +461,10 @@ export async function movimientosRecientes(req, res) {
                 startup: {
                     select: {
                         nombre: true,
-                        usuario: { // Incluir el usuario de la startup
+                        usuario: {
                             select: {
-                                avatar: true, // Seleccionar el avatar
+                                username: true,
+                                avatar: true,
                             },
                         },
                     },
@@ -372,44 +472,94 @@ export async function movimientosRecientes(req, res) {
             },
         });
 
-        // Recuperar eventos recientes con el usuario de la startup
-        const eventosRecientes = await prisma.evento.findMany({
-            where: { id_inversor: inversor.id },
+        // Recuperar eventos recientes creados por el usuario
+        const eventosCreadosRecientes = await prisma.evento.findMany({
+            where: { id_usuario: userId },
             orderBy: { fecha_evento: 'desc' },
             take: 10,
             select: {
                 id: true,
+                titulo: true,
                 descripcion: true,
                 fecha_evento: true,
-                tipo_evento: true,
-                startup: {
+                tipo: true,
+                fecha_creacion: true,
+                creador: {
                     select: {
-                        usuario: { // Incluir el usuario de la startup
-                            select: {
-                                avatar: true, // Seleccionar el avatar
-                            },
-                        },
+                        username: true,
+                        avatar: true,
+                    },
+                },
+                participantes: {
+                    where: {
+                        id_usuario: userId,
+                    },
+                    select: {
+                        fecha_union: true,
+                        usuario: true,
                     },
                 },
             },
         });
 
+        const eventosParticipadosRecientes = await prisma.evento.findMany({
+            where: {
+                participantes: {
+                    some: {
+                        id_usuario: userId,
+                    },
+                },
+                id_usuario: {
+                    not: userId, // Excluir eventos creados por el usuario
+                },
+            },
+            orderBy: { fecha_evento: 'desc' },
+            take: 10,
+            select: {
+                id: true,
+                titulo: true,
+                descripcion: true,
+                fecha_evento: true,
+                tipo: true,
+                creador: {
+                    select: {
+                        username: true,
+                        avatar: true,
+                    },
+                },
+                participantes: {
+                    where: {
+                        id_usuario: userId,
+                    },
+                    select: {
+                        fecha_union: true,
+                        usuario: true,
+                    },
+                },
+            },
+        });
+        
         // Combinar todos los movimientos en un solo array
         const movimientos = [
             ...inversionesRecientes.map(m => ({
                 ...m,
                 tipo_movimiento: 'inversion',
-                avatar: m.startup.usuario.avatar, // Agregar el avatar de la startup
+                avatar: m.startup.usuario.avatar,
             })),
             ...ofertasRecientes.map(m => ({
                 ...m,
                 tipo_movimiento: 'oferta',
-                avatar: m.startup.usuario.avatar, // Agregar el avatar de la startup
+                avatar: m.startup.usuario.avatar,
             })),
-            ...eventosRecientes.map(m => ({
+            ...eventosCreadosRecientes.map(m => ({
                 ...m,
                 tipo_movimiento: 'evento',
-                avatar: m.startup.usuario.avatar, // Agregar el avatar de la startup
+                avatar: m.creador.avatar,
+            })),
+            ...eventosParticipadosRecientes.map(m => ({
+                ...m,
+                tipo_movimiento: 'evento',
+                avatar: m.creador.avatar,
             })),
         ];
 
@@ -428,6 +578,7 @@ export async function movimientosRecientes(req, res) {
         res.status(500).json({ error: 'Error al recuperar movimientos recientes' });
     }
 }
+
 
 export async function obtenerContacto(req, res) {
     const token = req.cookies.token;
@@ -462,52 +613,74 @@ export async function obtenerContacto(req, res) {
 
 export async function obtenerEventos(req, res) {
     const token = req.cookies.token;
-
+  
     // Verificar que se proporciona el token
     if (!token) {
-        return res.status(402).json({ message: 'Token no proporcionado' });
+      return res.status(401).json({ message: 'Token no proporcionado' });
     }
-
+  
     try {
-        // Decodificar el token para obtener el ID del usuario
-        const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-        const userId = decodedToken.userId;
-
-        if (!userId) {
-            return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
-        }
-
-        // Buscar el inversor asociado al usuario
-        const inversor = await prisma.inversor.findFirst({
-            where: { id_usuario: userId },
-        });
-
-        // Si no se encuentra el inversor
-        if (!inversor) {
-            return res.status(404).json({ message: 'Inversor no encontrado' });
-        }
-
-        // Obtener eventos relacionados con el inversor
-        const eventos = await prisma.evento.findMany({
-            where: { id_inversor: inversor.id },
-            orderBy: { fecha_evento: 'asc' }, // Ordenar por fecha ascendente
-            select: {
-                id: true,
-                descripcion: true,
-                fecha_evento: true,
-                tipo_evento: true,
+      // Decodificar el token para obtener el ID del usuario
+      const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+      const userId = decodedToken.userId;
+  
+      if (!userId) {
+        return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
+      }
+  
+      // Obtener eventos en los que el usuario es el creador o participante
+      const eventosCreados = await prisma.evento.findMany({
+        where: { id_usuario: userId },
+        orderBy: { fecha_evento: 'asc' },
+        select: {
+          id: true,
+          titulo: true,
+          descripcion: true,
+          fecha_evento: true,
+          tipo: true,
+          tipo_movimiento: true,
+          creador: true,
+        },
+      });
+  
+      // Obtener eventos en los que el usuario participa (pero no es el creador)
+      const eventosParticipando = await prisma.evento.findMany({
+        where: {
+          participantes: {
+            some: {
+              id_usuario: userId,
             },
-        });
-
-        // Si no hay eventos
-        if (eventos.length === 0) {
-            return res.status(200).json({ message: 'No hay eventos disponibles para este inversor.' });
-        }
-
-        // Responder con los eventos encontrados
-        res.json(eventos);
+          },
+          id_usuario: { not: userId }, // Excluye los eventos creados por el usuario
+        },
+        orderBy: { fecha_evento: 'asc' },
+        select: {
+          id: true,
+          titulo: true,
+          descripcion: true,
+          fecha_evento: true,
+          tipo: true,
+          tipo_movimiento: true,
+          creador: true,
+        },
+      });
+  
+      // Marcar los eventos en los que el usuario es creador o participante
+      const eventos = [
+        ...eventosCreados.map(evento => ({ ...evento, esCreador: true, esParticipante: false })),
+        ...eventosParticipando.map(evento => ({ ...evento, esCreador: false, esParticipante: true })),
+      ];
+  
+      // Si no hay eventos
+      if (eventos.length === 0) {
+        return res.status(200).json({ message: 'No hay eventos disponibles para este usuario.' });
+      }
+  
+      // Responder con los eventos encontrados
+      res.json(eventos);
     } catch (error) {
-        console.error('Error al obtener eventos:', error);
-        res.status(500).json({ error: 'Error al recuperar eventos.' });
+      console.error('Error al obtener eventos:', error);
+      res.status(500).json({ error: 'Error al recuperar eventos.' });
     }
-}
+  }
+  

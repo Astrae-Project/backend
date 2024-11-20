@@ -12,7 +12,7 @@ router.post('/iniciar-sesion', loginUser);
 
 router.post('/cerrar-sesion', loginOut);
 
-router.post('/seleccionar-rol/:id', selectRole);
+router.post('/seleccionar-rol', selectRole);
 
 router.post('/crear-inversor/:id', investorRole);
 

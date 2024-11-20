@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Evento" ADD COLUMN     "fecha_creacion" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

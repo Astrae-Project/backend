@@ -154,8 +154,6 @@ export const createGroup = async (req, res) => {
   }
 };
 
-  
-
 export const changeData = async (req, res) => {
   try {
     const token = req.cookies.token;
