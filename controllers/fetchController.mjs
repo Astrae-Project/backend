@@ -5,8 +5,9 @@ import { calcularROI } from "../lib/functionCalculations.mjs";
 // Controlador para obtener datos del inversor
 export const datosInversor = async (req, res) => {
     const token = req.cookies.token;
+    const refreshToken = req.cookies.refreshToken;
 
-    if (!token) {
+    if (!token || !refreshToken) {
         return res.status(402).json({ message: 'Token no proporcionado' });
     }
 
@@ -188,43 +189,117 @@ export const datosStartup = async (req, res) => {
     }
 };
 
-export const startupsAleatorias = async (req, res) => {
-    try {
-      // Obtener startups aleatorias
-      const startups = await prisma.startup.findMany({
-        take: 10, // Número de startups aleatorias a devolver
-        orderBy: {
-          // Puedes añadir lógica de orden aquí si lo necesitas
-          id: 'desc', // Solo un ejemplo de orden
-        },
+export const startupEspecifica = async (req, res) => {
+    const token = req.cookies.token;
+    const { startupId } = req.params;
 
-        include: {
-            usuario: {
-                select: {
-                    username: true,
-                    avatar: true
-                },
-            },
-            inversiones: {
-                include: {
-                    inversor: true, // Incluir datos de los inversores
-                },
-            },
-        },
-
-      });
-  
-      if (!startups || startups.length === 0) {
-        return res.status(404).json({ message: 'No se encontraron startups aleatorias' });
-      }
-  
-      // Devolver las startups aleatorias
-      res.json({ startups });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ message: 'Error al recuperar las startups aleatorias' });
+    if (!token) {
+        return res.status(402).json({ message: 'Token no proporcionado' });
     }
-  };
+
+    try {
+        const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+        const userId = decodedToken.userId;
+
+        if (!userId) {
+            return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
+        }
+
+        // Convertir startupId a entero
+        const startupIdInt = parseInt(startupId, 10);
+
+        if (isNaN(startupIdInt)) {
+            return res.status(400).json({ message: 'ID de startup no válido' });
+        }
+
+        // Recuperar datos de la startup por su ID
+        const startup = await prisma.startup.findUnique({
+            where: { id: startupIdInt }, // Usar el ID como entero
+            include: {
+                usuario: {
+                    select: {
+                        seguidores: true,
+                        username: true,
+                        avatar: true,
+                    },
+                },
+                inversiones: {
+                    include: {
+                        inversor: {
+                            select: {
+                                nombre: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        if (!startup) {
+            return res.status(404).json({ error: 'Startup no encontrada' });
+        }
+
+        // Calcular la recaudación total
+        const recaudacionTotal = startup.inversiones.reduce((total, inversion) => {
+            return total + parseFloat(inversion.monto_invertido);
+        }, 0);
+
+        res.json({
+            id: startup.id,
+            nombre: startup.nombre,
+            sector: startup.sector,
+            plantilla: startup.plantilla,
+            estado_financiacion: startup.estado_financiacion,
+            porcentaje_disponible: startup.porcentaje_disponible,
+            valoracion: startup.valoracion,
+            username: startup.usuario.username,
+            avatar: startup.usuario.avatar,
+            seguidores: startup.usuario.seguidores.length,
+            inversores: startup.inversiones.length,
+            recaudacionTotal,
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al recuperar datos de la startup' });
+    }
+};
+
+
+export const startupsRecomendadas = async (req, res) => {
+    try {
+        // Obtener startups aleatorias
+        const startups = await prisma.startup.findMany({
+            take: 10,
+            orderBy: {
+                id: 'desc',
+            },
+            include: {
+                usuario: {
+                    select: {
+                        username: true,
+                        avatar: true,
+                        seguidores: true
+                    },
+                },
+                inversiones: {
+                    include: {
+                        inversor: true,
+                    },
+                },
+            },
+        });
+
+        if (!startups || startups.length === 0) {
+            return res.status(404).json({ message: 'No se encontraron startups aleatorias' });
+        }
+
+        res.json({ startups });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error al recuperar las startups aleatorias' });
+    }
+};
+
 
   export const startupsSeguidas = async (req, res) => {
     try {
@@ -433,16 +508,15 @@ export async function movimientosRecientes(req, res) {
                 porcentaje_adquirido: true,
                 fecha: true,
                 startup: {
-                    select: {
-                        nombre: true,
-                        valoracion: true,
+                    include: {
                         usuario: {
                             select: {
                                 username: true,
                                 avatar: true,
+                                seguidores: true,
                             },
                         },
-                    },
+                     },
                 },
             },
         });
@@ -459,15 +533,15 @@ export async function movimientosRecientes(req, res) {
                 fecha_creacion: true,
                 estado: true,
                 startup: {
-                    select: {
-                        nombre: true,
+                    include: {
                         usuario: {
                             select: {
                                 username: true,
                                 avatar: true,
+                                seguidores: true,
                             },
                         },
-                    },
+                     },
                 },
             },
         });

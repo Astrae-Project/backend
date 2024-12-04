@@ -136,7 +136,7 @@ export const dataEvent = async (req, res) => {
       }));
   
       // Determinamos el tipo y el username del creador basado en su rol
-      let creadorUsername = evento.creador.usuario.username; // Asumiendo que hay solo un username
+      let creadorUsername = evento.creador.username; // Asumiendo que hay solo un username
   
       // Respuesta con la información del evento y sus participantes
       return res.status(200).json({

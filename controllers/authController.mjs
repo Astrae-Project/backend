@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 
 const prisma = new PrismaClient();
 
+// Registro de usuarios
 export const registerUser = async (req, res) => {
   const { email, password, username } = req.body;
 
@@ -15,7 +16,7 @@ export const registerUser = async (req, res) => {
   try {
     console.log('Verificando si el usuario ya existe...');
     const existingUser = await prisma.usuario.findUnique({
-      where: { email }
+      where: { email },
     });
 
     if (existingUser) {
@@ -31,44 +32,40 @@ export const registerUser = async (req, res) => {
       data: {
         email,
         password: hashedPassword,
-        username
-      }
+        username,
+      },
     });
 
     const userId = newUser.id;
     console.log('Usuario creado con ID:', userId);
 
-    // Crear tokens de acceso y refresco
+    // Crear tokens
     const accessToken = jwt.sign({ userId: newUser.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    const refreshToken = jwt.sign({ userId: newUser.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const refreshToken = jwt.sign({ userId: newUser.id }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
 
-    // Imprimir el token en la consola
-    console.log('Token creado:', accessToken);
+    // Guardar los tokens en cookies
+    res.cookie('token', accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 3600000, // 1 hora
+      sameSite: 'Lax',
+    });
 
-      // Guardar los tokens en cookies
-      res.cookie('token', accessToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        sameSite: 'Lax' // Mejorar la seguridad
-      });
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+      sameSite: 'Lax',
+    });
 
-      // Guardar los tokens en cookies
-      res.cookie('refreshToken', refreshToken, { // Cambiar 'refresh-token' a 'refreshToken'
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
-        sameSite: 'Lax' // Mejorar la seguridad
-      });
-
-
-    res.status(201).json({ message: 'Usuario registrado con éxito', userId: newUser.id }); // Devuelve userId
+    res.status(201).json({ message: 'Usuario registrado con éxito', userId: newUser.id });
   } catch (err) {
     console.error('Error en el registro:', err);
     res.status(500).json({ message: 'Error al registrar el usuario' });
   }
 };
 
+// Inicio de sesión
 export const loginUser = async (req, res) => {
   const { email, password } = req.body;
 
@@ -91,22 +88,18 @@ export const loginUser = async (req, res) => {
     const accessToken = jwt.sign({ userId: user.id, role: user.rol }, process.env.JWT_SECRET, { expiresIn: '1h' });
     const refreshToken = jwt.sign({ userId: user.id, role: user.rol }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
 
-    // Imprimir el token en la consola
-    console.log('Token creado:', accessToken);
-
-    // Guardar los tokens en cookies
     res.cookie('token', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: 3600000, // 1 hora
-      sameSite: 'Lax'
+      sameSite: 'Lax',
     });
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
-      sameSite: 'Lax'
+      sameSite: 'Lax',
     });
 
     return res.status(200).json({ message: 'Inicio de sesión exitoso', accessToken, refreshToken });
@@ -116,18 +109,55 @@ export const loginUser = async (req, res) => {
   }
 };
 
+// Cierre de sesión
 export const loginOut = async (req, res) => {
   try {
-    // Eliminar el token JWT de las cookies
     res.cookie('token', '', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      expires: new Date(0) // Establecer una fecha de expiración pasada para eliminar la cookie
+      expires: new Date(0),
+    });
+
+    res.cookie('refreshToken', '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      expires: new Date(0),
     });
 
     res.status(200).json({ message: 'Sesión cerrada exitosamente' });
   } catch (error) {
     console.error('Error al cerrar sesión:', error);
     res.status(500).json({ message: 'Error al cerrar sesión' });
+  }
+};
+
+// Refrescar el access token
+export const refreshAccessToken = async (req, res) => {
+  const { refreshToken } = req.cookies;
+
+  if (!refreshToken) {
+    return res.status(401).json({ message: 'No se encontró el token de refresco' });
+  }
+
+  try {
+    const payload = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+
+    const newAccessToken = jwt.sign(
+      { userId: payload.userId, role: payload.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    res.cookie('token', newAccessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 3600000, // 1 hora
+      sameSite: 'Lax',
+    });
+
+    return res.status(200).json({ accessToken: newAccessToken });
+  } catch (error) {
+    console.error('Error al refrescar el token:', error);
+    return res.status(403).json({ message: 'Token de refresco inválido o expirado' });
   }
 };

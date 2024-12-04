@@ -1,5 +1,5 @@
 import express from 'express';
-import { datosInversor, datosPortfolio, datosStartup, gruposUsuario, movimientosRecientes, obtenerContacto, obtenerEventos, startupsAleatorias } from '../controllers/fetchController.mjs';
+import { datosInversor, datosPortfolio, datosStartup, gruposUsuario, movimientosRecientes, obtenerContacto, obtenerEventos, startupsRecomendadas, startupEspecifica } from '../controllers/fetchController.mjs';
 
 const router = express.Router();
 
@@ -9,7 +9,9 @@ router.get('/portfolio', datosPortfolio);
 
 router.get('/startup', datosStartup);
 
-router.get('/startup/recomendadas', startupsAleatorias);
+router.get('/startup/recomendadas', startupsRecomendadas); // Ruta fija para startups aleatorias
+
+router.get('/startup/:startupId', startupEspecifica);  // Ruta dinámica para una startup específica
 
 router.get('/grupos', gruposUsuario);
 
