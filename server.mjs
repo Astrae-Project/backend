@@ -11,6 +11,7 @@ import fetchingRoutes from './routes/fetchingRoutes.mjs';
 import groupesRoutes from './routes/groupesRoutes.mjs'
 import profileRoutes from './routes/profileRoutes.mjs'
 import eventRoutes from './routes/eventRoutes.mjs'
+import followRoutes from './routes/followRoutes.mjs'
 
 // Configuración de variables de entorno
 dotenv.config();
@@ -40,6 +41,7 @@ app.use('/api/data', fetchingRoutes)
 app.use('/api/grupos', groupesRoutes)
 app.use('/api/perfil', profileRoutes)
 app.use('/api/evento', eventRoutes)
+app.use('/api/follow', followRoutes)
 
 // Ruta principal
 app.get('/', (req, res) => {

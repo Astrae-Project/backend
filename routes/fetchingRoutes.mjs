@@ -1,24 +1,33 @@
 import express from 'express';
-import { datosInversor, datosPortfolio, datosStartup, gruposUsuario, movimientosRecientes, obtenerContacto, obtenerEventos, startupsRecomendadas, startupEspecifica } from '../controllers/fetchController.mjs';
+import { 
+    datosUsuario, 
+    datosPortfolio, 
+    gruposUsuario, 
+    movimientosRecientes, 
+    obtenerContacto, 
+    obtenerEventos, 
+    startupsRecomendadas, 
+    startupEspecifica 
+} from '../controllers/fetchController.mjs';
 
 const router = express.Router();
 
-router.get('/inversor', datosInversor);
+// Ruta general para obtener datos de usuario, dependiendo del rol (inversor o startup)
+router.get('/usuario', datosUsuario);
 
+// Ruta para obtener el portfolio de un usuario (inversor o startup)
 router.get('/portfolio', datosPortfolio);
 
-router.get('/startup', datosStartup);
+// Ruta fija para startups aleatorias
+router.get('/startup/recomendadas', startupsRecomendadas);
 
-router.get('/startup/recomendadas', startupsRecomendadas); // Ruta fija para startups aleatorias
+// Ruta dinámica para obtener una startup específica
+router.get('/startup/:startupId', startupEspecifica);
 
-router.get('/startup/:startupId', startupEspecifica);  // Ruta dinámica para una startup específica
-
+// Rutas adicionales
 router.get('/grupos', gruposUsuario);
-
-router.get('/movimientos-recientes', movimientosRecientes)
-
-router.get('/contacto', obtenerContacto)
-
-router.get('/eventos', obtenerEventos)
+router.get('/movimientos-recientes', movimientosRecientes);
+router.get('/contacto', obtenerContacto);
+router.get('/eventos', obtenerEventos);
 
 export default router;

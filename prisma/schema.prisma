@@ -26,8 +26,8 @@ model Usuario {
   mensajes_recibidos  Mensaje[]      @relation("recibidos")
   notificaciones      Notificacion[]
   eventosParticipados Participante[] @relation("ParticipacionesEventos")
-  seguidos            Seguimiento[]  @relation("seguidos")
-  seguidores          Seguimiento[]  @relation("seguidores")
+  seguidores          Seguimiento[]  @relation("seguidos")
+  seguidos            Seguimiento[]  @relation("seguidores")
   startups            Startup[]
   suscriptores        Suscripcion[]  @relation("suscriptores")
   suscritos           Suscripcion[]  @relation("suscritos")
@@ -125,7 +125,10 @@ model Suscripcion {
   id_suscriptor   Int
   id_suscrito     Int
   fecha_inicio    DateTime @default(now())
-  auto_renovacion Boolean  @default(false)
+  fecha_expiracion DateTime // Fecha de expiración de la suscripción
+  estado          EstadoSuscripcion @default(ACTIVA) // Estado de la suscripción
+  auto_renovacion Boolean  @default(false) // Si la suscripción se renueva automáticamente
+  metodo_pago     MetodoPago // Método de pago utilizado
   suscriptor      Usuario  @relation("suscriptores", fields: [id_suscriptor], references: [id])
   suscrito        Usuario  @relation("suscritos", fields: [id_suscrito], references: [id])
 }
@@ -135,8 +138,9 @@ model Seguimiento {
   id_seguidor  Int
   id_seguido   Int
   fecha_inicio DateTime @default(now())
-  seguido      Usuario  @relation("seguidos", fields: [id_seguido], references: [id])
-  seguidor     Usuario  @relation("seguidores", fields: [id_seguidor], references: [id])
+  seguido   Usuario @relation("seguidos", fields: [id_seguido], references: [id], onDelete: Cascade)
+  seguidor  Usuario @relation("seguidores", fields: [id_seguidor], references: [id], onDelete: Cascade)
+  @@unique([id_seguidor, id_seguido])
 }
 
 model Notificacion {
@@ -259,4 +263,17 @@ enum RolGrupo {
 enum Rol {
   inversor
   startup
+}
+
+enum EstadoSuscripcion {
+  ACTIVA
+  CANCELADA
+  PENDIENTE
+  EXPIRADA
+}
+
+enum MetodoPago {
+  TARJETA
+  PAYPAL
+  OTRO
 }
