@@ -37,7 +37,7 @@ app.use(cookieParser());
 app.use('/api/auth', authRoutes);
 app.use('/api/invest', investRoutes, verifyToken);
 app.use('/api/search', searchingRoutes, verifyToken);
-app.use('/api/data', fetchingRoutes)
+app.use('/api/data', fetchingRoutes, verifyToken)
 app.use('/api/grupos', groupesRoutes)
 app.use('/api/perfil', profileRoutes)
 app.use('/api/evento', eventRoutes)

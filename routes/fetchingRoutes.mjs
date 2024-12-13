@@ -1,19 +1,12 @@
 import express from 'express';
-import { 
-    datosUsuario, 
-    datosPortfolio, 
-    gruposUsuario, 
-    movimientosRecientes, 
-    obtenerContacto, 
-    obtenerEventos, 
-    startupsRecomendadas, 
-    startupEspecifica 
-} from '../controllers/fetchController.mjs';
+import { datosUsuario, datosPortfolio, gruposUsuario, movimientosRecientes, obtenerContacto, obtenerEventos, startupsRecomendadas, startupEspecifica, usuarioEspecifico } from '../controllers/fetchController.mjs';
 
 const router = express.Router();
 
 // Ruta general para obtener datos de usuario, dependiendo del rol (inversor o startup)
 router.get('/usuario', datosUsuario);
+
+router.get('/usuario/:userId', usuarioEspecifico)
 
 // Ruta para obtener el portfolio de un usuario (inversor o startup)
 router.get('/portfolio', datosPortfolio);

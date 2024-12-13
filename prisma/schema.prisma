@@ -31,6 +31,15 @@ model Usuario {
   startups            Startup[]
   suscriptores        Suscripcion[]  @relation("suscriptores")
   suscritos           Suscripcion[]  @relation("suscritos")
+  Sesion              Sesion[]
+}
+
+model Sesion {
+  id         Int      @id @default(autoincrement())
+  id_sesion  String   @unique
+  id_usuario Int
+  creado     DateTime @default(now())
+  usuario    Usuario  @relation(fields: [id_usuario], references: [id], onDelete: Cascade)
 }
 
 model Inversor {
@@ -121,16 +130,16 @@ model Ingreso {
 }
 
 model Suscripcion {
-  id              Int      @id @default(autoincrement())
-  id_suscriptor   Int
-  id_suscrito     Int
-  fecha_inicio    DateTime @default(now())
+  id               Int               @id @default(autoincrement())
+  id_suscriptor    Int
+  id_suscrito      Int
+  fecha_inicio     DateTime          @default(now())
   fecha_expiracion DateTime // Fecha de expiración de la suscripción
-  estado          EstadoSuscripcion @default(ACTIVA) // Estado de la suscripción
-  auto_renovacion Boolean  @default(false) // Si la suscripción se renueva automáticamente
-  metodo_pago     MetodoPago // Método de pago utilizado
-  suscriptor      Usuario  @relation("suscriptores", fields: [id_suscriptor], references: [id])
-  suscrito        Usuario  @relation("suscritos", fields: [id_suscrito], references: [id])
+  estado           EstadoSuscripcion @default(ACTIVA) // Estado de la suscripción
+  auto_renovacion  Boolean           @default(false) // Si la suscripción se renueva automáticamente
+  metodo_pago      MetodoPago // Método de pago utilizado
+  suscriptor       Usuario           @relation("suscriptores", fields: [id_suscriptor], references: [id])
+  suscrito         Usuario           @relation("suscritos", fields: [id_suscrito], references: [id])
 }
 
 model Seguimiento {
@@ -138,8 +147,9 @@ model Seguimiento {
   id_seguidor  Int
   id_seguido   Int
   fecha_inicio DateTime @default(now())
-  seguido   Usuario @relation("seguidos", fields: [id_seguido], references: [id], onDelete: Cascade)
-  seguidor  Usuario @relation("seguidores", fields: [id_seguidor], references: [id], onDelete: Cascade)
+  seguido      Usuario  @relation("seguidos", fields: [id_seguido], references: [id], onDelete: Cascade)
+  seguidor     Usuario  @relation("seguidores", fields: [id_seguidor], references: [id], onDelete: Cascade)
+
   @@unique([id_seguidor, id_seguido])
 }
 

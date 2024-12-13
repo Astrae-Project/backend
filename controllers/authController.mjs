@@ -1,6 +1,8 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import { createSession } from '../lib/sessionHandler.mjs';
+import { generateAccessToken } from '../lib/accessToken.mjs';
 
 const prisma = new PrismaClient();
 
@@ -9,7 +11,7 @@ export const registerUser = async (req, res) => {
   const { email, password, username } = req.body;
 
   if (!email || !password || !username) {
-    console.log('Faltan datos:', { email, password });
+    console.error('Faltan datos:', { email, password, username });
     return res.status(400).json({ message: 'Faltan campos requeridos' });
   }
 
@@ -20,7 +22,7 @@ export const registerUser = async (req, res) => {
     });
 
     if (existingUser) {
-      console.log('El usuario ya existe:', email);
+      console.warn('El usuario ya existe:', email);
       return res.status(400).json({ message: 'El usuario ya existe' });
     }
 
@@ -37,28 +39,36 @@ export const registerUser = async (req, res) => {
     });
 
     const userId = newUser.id;
-    console.log('Usuario creado con ID:', userId);
 
     // Crear tokens
-    const accessToken = jwt.sign({ userId: newUser.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    const refreshToken = jwt.sign({ userId: newUser.id }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
+    const accessToken = jwt.sign(
+      { userId: user.id, role: user.rol },
+      process.env.JWT_SECRET,
+      { expiresIn: '5s' }
+    );
+    const refreshToken = jwt.sign(
+      { userId: user.id, role: user.rol },
+      process.env.JWT_REFRESH_SECRET,
+      { expiresIn: '7d' }
+    );
 
-    // Guardar los tokens en cookies
     res.cookie('token', accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 3600000, // 1 hora
-      sameSite: 'Lax',
+      secure: process.env.NODE_ENV === 'production', // Solo si estás usando HTTPS
+      maxAge: 60 * 60 * 1000, // 1 hora
+      sameSite: 'Strict', // Protege contra ataques CSRF
+      path: '/', // Establece el path adecuado para las cookies
     });
 
     res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      httpOnly: true, // No accesible desde JavaScript
+      secure: process.env.NODE_ENV === 'production', // Solo si estás usando HTTPS
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
-      sameSite: 'Lax',
+      sameSite: 'Strict', // Protege contra ataques CSRF
+      path: '/', // Establece el path adecuado para las cookies
     });
 
-    res.status(201).json({ message: 'Usuario registrado con éxito', userId: newUser.id });
+    res.status(201).json({ message: 'Usuario registrado con éxito', session });
   } catch (err) {
     console.error('Error en el registro:', err);
     res.status(500).json({ message: 'Error al registrar el usuario' });
@@ -81,35 +91,41 @@ export const loginUser = async (req, res) => {
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
+
     if (!isPasswordValid) {
       return res.status(401).json({ message: 'Contraseña incorrecta' });
     }
 
-    const accessToken = jwt.sign({ userId: user.id, role: user.rol }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    const refreshToken = jwt.sign({ userId: user.id, role: user.rol }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
+    const accessToken = generateAccessToken(user)
+    const refreshToken = jwt.sign(
+      { userId: user.id, role: user.rol },
+      process.env.JWT_REFRESH_SECRET,
+      { expiresIn: '7d' }
+    );
 
     res.cookie('token', accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 3600000, // 1 hora
-      sameSite: 'Lax',
+      secure: process.env.NODE_ENV === 'production', // Solo si estás usando HTTPS
+      maxAge: 60 * 60 * 1000, // 1 hora
+      sameSite: 'Strict', // Protege contra ataques CSRF
+      path: '/', // Establece el path adecuado para las cookies
     });
 
     res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      httpOnly: true, // No accesible desde JavaScript
+      secure: process.env.NODE_ENV === 'production', // Solo si estás usando HTTPS
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
-      sameSite: 'Lax',
+      sameSite: 'Strict', // Protege contra ataques CSRF
+      path: '/', // Establece el path adecuado para las cookies
     });
 
-    return res.status(200).json({ message: 'Inicio de sesión exitoso', accessToken, refreshToken });
+    return res.status(200).json({ message: 'Inicio de sesión exitoso', accessToken });
   } catch (error) {
     console.error('Error en loginUser:', error);
     return res.status(500).json({ message: 'Error en el servidor' });
   }
 };
 
-// Cierre de sesión
 export const loginOut = async (req, res) => {
   try {
     res.cookie('token', '', {
@@ -131,33 +147,46 @@ export const loginOut = async (req, res) => {
   }
 };
 
-// Refrescar el access token
-export const refreshAccessToken = async (req, res) => {
-  const { refreshToken } = req.cookies;
-
-  if (!refreshToken) {
-    return res.status(401).json({ message: 'No se encontró el token de refresco' });
-  }
+export const tokenController = async (req, res, next) => {
+  const refreshToken = req.cookies.refreshToken; // Asegúrate de que estás extrayendo correctamente el refresh token
 
   try {
-    const payload = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+    if (!refreshToken) {
+      return res.status(403).json({ message: "No refresh token provided" });
+    }
 
-    const newAccessToken = jwt.sign(
-      { userId: payload.userId, role: payload.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '1h' }
-    );
+    // Decodificar el refresh token para obtener el userId
+    jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET, async (err, decoded) => {
+      if (err) {
+        return res.status(403).json({ message: "Failed to authenticate token" });
+      }
 
-    res.cookie('token', newAccessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 3600000, // 1 hora
-      sameSite: 'Lax',
+      // Extraemos el userId del payload del refresh token
+      const { userId } = decoded;
+
+      // Buscar al usuario en la base de datos utilizando el userId
+      const user = await prisma.usuario.findUnique({ where: { id: userId } }); // Ajusta según tu ORM (Mongoose, Sequelize, etc.)
+
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Generar un nuevo access token usando los datos del usuario
+      const accessToken = generateAccessToken(user)
+
+      // Establecer el nuevo access token en la cookie HttpOnly
+      res.cookie('token', accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production', // Solo si estás usando HTTPS
+        maxAge: 60 * 60 * 1000, // 1 hora
+        sameSite: 'Strict', // Protege contra ataques CSRF
+        path: '/', // Establece el path adecuado para las cookies
+      });
+
+      return res.status(200).json({ message: "Token refreshed successfully", accessToken });
     });
-
-    return res.status(200).json({ accessToken: newAccessToken });
   } catch (error) {
-    console.error('Error al refrescar el token:', error);
-    return res.status(403).json({ message: 'Token de refresco inválido o expirado' });
+    console.error("Error en el tokenController:", error);
+    next(error);
   }
 };
