@@ -44,7 +44,7 @@ model Sesion {
 
 model Inversor {
   id               Int         @id @default(autoincrement())
-  id_usuario       Int
+  id_usuario       Int         @unique
   nombre           String      @db.VarChar(255)
   perfil_inversion String
   inversiones      Inversion[]
@@ -56,7 +56,7 @@ model Inversor {
 
 model Startup {
   id                    Int         @id @default(autoincrement())
-  id_usuario            Int
+  id_usuario            Int         @unique
   nombre                String      @db.VarChar(255)
   sector                String      @db.VarChar(255)
   estado_financiacion   String      @db.VarChar(255)

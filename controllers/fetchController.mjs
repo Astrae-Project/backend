@@ -1,7 +1,7 @@
 import prisma from "../lib/prismaClient.mjs"; 
 import jwt from 'jsonwebtoken';
 import { calcularROI } from "../lib/functionCalculations.mjs";
-
+ 
 export async function datosUsuario (req, res) {
     const token = req.cookies.token;
 
@@ -150,46 +150,67 @@ export async function datosUsuario (req, res) {
 };
 
 export async function usuarioEspecifico(req, res) {
-    const { userId } = req.params; // ID del usuario recibido de los parámetros de la URL
+    const { username } = req.params;
 
-    // Convertir userId a número (entero)
-    const parsedUserId = parseInt(userId, 10); // El 10 indica base decimal
+    if (!username) {
+        return res.status(400).json({ message: 'Username no proporcionado' });
+    }
 
-    // Verificar si la conversión fue exitosa
-    if (isNaN(parsedUserId)) {
-        return res.status(400).json({ message: 'El ID de usuario no es válido' });
+    const token = req.cookies.token;
+
+    if (!token) {
+        return res.status(401).json({ message: 'Token no proporcionado' });
     }
 
     try {
-        // Buscar el usuario por su ID
-        const usuario = await prisma.usuario.findFirst({
-            where: { id: parsedUserId },
-            select: {
-                username: true,
-                email: true,
-                ciudad: true,
-                pais: true,
-                avatar: true,
-                seguidores: true,
-                suscriptores: true,
-                rol: true,
+        const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+        const userId = decodedToken.userId;
+
+        if (!userId) {
+            return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
+        }
+
+        const usuario = await prisma.usuario.findUnique({
+            where: { username },
+            include: {
+                inversores: true,
+                startups: true,
             },
         });
 
-        if (!usuario) {
+        if (!usuario) { 
             return res.status(404).json({ message: 'Usuario no encontrado' });
         }
 
-        const roles = usuario.rol;
+        // Determinar el rol
+        const esInversor = usuario.inversores?.length > 0;
+        const esStartup = usuario.startups?.length > 0;
 
-        // Si el usuario es un inversor
-        if (roles === 'inversor') {
-            const inversor = await prisma.inversor.findFirst({
-                where: { id_usuario: parsedUserId },
+        if (esInversor) {
+            // Lógica para inversor
+            const inversor = await prisma.inversor.findUnique({
+                where: { id_usuario: usuario.id },
                 include: {
+                    usuario: {
+                        select: {
+                            username: true,
+                            seguidores: true,
+                            suscriptores: true,
+                            fecha_creacion: true,
+                            avatar: true,
+                            pais: true,
+                            ciudad: true,
+                            eventosCreados: true,
+                            eventosParticipados: true
+                        },
+                    },
                     inversiones: {
                         include: {
-                            startup: true,
+                            startup: {
+                                select: {
+                                    sector: true,
+                                },
+                            },
                         },
                     },
                     portfolio: true,
@@ -203,14 +224,14 @@ export async function usuarioEspecifico(req, res) {
 
             // Calcular el sector favorito
             const sectores = inversor.inversiones.reduce((acc, inv) => {
-                const sector = inv.startup.sector;
+                const sector = inv.startup?.sector || 'Desconocido';
                 acc[sector] = (acc[sector] || 0) + 1;
                 return acc;
             }, {});
 
-            const sectorFavorito = Object.keys(sectores).reduce((a, b) => (sectores[a] > sectores[b] ? a : b), "Desconocido");
+            const sectorFavorito = Object.keys(sectores).reduce((a, b) => (sectores[a] > sectores[b] ? a : b), 'Desconocido');
 
-            // Calcular el ROI y otras métricas
+            // Calcular ROI
             let totalROI = 0;
             let countROI = 0;
 
@@ -218,55 +239,47 @@ export async function usuarioEspecifico(req, res) {
                 const montoInvertido = Number(inversion.monto_invertido);
                 const valorInversion = Number(inversion.valor);
 
-                if (isNaN(montoInvertido) || isNaN(valorInversion)) {
-                    console.error(`Inversión ID ${inversion.id}: Monto Invertido (${inversion.monto_invertido}), Valor (${inversion.valor}) no son números.`);
-                    return {
-                        ...inversion,
-                        esExitosa: false,
-                        roi: null,
-                    };
+                if (!montoInvertido || !valorInversion || montoInvertido <= 0) {
+                    return { ...inversion, esExitosa: false, roi: null };
                 }
 
-                const esExitosa = montoInvertido < valorInversion;
-                const roi = calcularROI(montoInvertido, valorInversion);
+                const roi = ((valorInversion - montoInvertido) / montoInvertido) * 100;
+                totalROI += roi;
+                countROI++;
 
-                if (montoInvertido > 0) {
-                    totalROI += roi;
-                    countROI++;
-                }
-
-                return {
-                    ...inversion,
-                    esExitosa,
-                    roi,
-                };
+                return { ...inversion, roi };
             });
 
-            const totalPuntuacion = inversor.resenas.reduce((acc, resena) => acc + parseFloat(resena.puntuacion), 0);
-            const puntuacionMedia = inversor.resenas.length > 0 ? totalPuntuacion / inversor.resenas.length : 0;
+            const puntuacionMedia =
+                inversor.resenas.length > 0
+                    ? inversor.resenas.reduce((acc, resena) => acc + parseFloat(resena.puntuacion), 0) /
+                      inversor.resenas.length
+                    : 0;
 
             const roiPromedio = countROI > 0 ? totalROI / countROI : 0;
 
-            res.json({
-                usuario,
+            return res.json({
                 inversor,
+                seguidores: inversor.usuario.seguidores.length,
+                suscriptores: inversor.usuario.suscriptores.length,
                 inversionesRealizadas: inversor.inversiones.length,
                 roiPromedio: roiPromedio.toFixed(2),
                 puntuacionMedia: puntuacionMedia.toFixed(2),
                 sectorFavorito,
             });
-        } else if (roles === 'startup') {
+}
+        else if (esStartup) {
+            // Lógica para la startup
             const startup = await prisma.startup.findFirst({
-                where: { id_usuario: parsedUserId },
+                where: { id_usuario: usuario.id },
                 include: {
                     usuario: {
                         select: {
                             seguidores: true,
                             username: true,
                             fecha_creacion: true,
-                            ciudad: true,
-                            pais: true,
-                            avatar: true,
+                            eventosCreados: true,
+                            eventosParticipados: true
                         },
                     },
                     inversiones: {
@@ -278,26 +291,24 @@ export async function usuarioEspecifico(req, res) {
             });
 
             if (!startup) {
-                return res.status(404).json({ error: 'Startup no encontrada' });
+                return res.status(404).json({ message: 'Startup no encontrada' });
             }
 
-            const recaudacionTotal = startup.inversiones.reduce((total, inversion) => {
-                return total + parseFloat(inversion.monto_invertido);
-            }, 0);
+            const recaudacionTotal = startup.inversiones.reduce((total, inversion) => total + parseFloat(inversion.monto_invertido), 0);
 
-            res.json({
-                usuario,
+            return res.json({
                 startup,
                 seguidores: startup.usuario.seguidores.length,
                 inversores: startup.inversiones.length,
                 recaudacionTotal,
             });
-        } else {
-            return res.status(401).json({ message: 'Rol no válido' });
         }
+
+        return res.status(401).json({ message: 'Rol no válido' });
+
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: 'Error al recuperar datos del usuario' });
+        return res.status(500).json({ error: 'Error al recuperar datos del usuario' });
     }
 }
 
@@ -799,7 +810,6 @@ export async function obtenerContacto(req, res) {
 export async function obtenerEventos(req, res) {
     const token = req.cookies.token;
   
-    // Verificar que se proporciona el token
     if (!token) {
       return res.status(401).json({ message: 'Token no proporcionado' });
     }
@@ -868,4 +878,3 @@ export async function obtenerEventos(req, res) {
       res.status(500).json({ error: 'Error al recuperar eventos.' });
     }
   }
-  
