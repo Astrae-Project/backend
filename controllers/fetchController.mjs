@@ -175,6 +175,12 @@ export async function usuarioEspecifico(req, res) {
             include: {
                 inversores: true,
                 startups: true,
+                Contacto: true,
+                grupos: {
+                    include: {
+                        grupo: true,
+                    },
+                },
             },
         });
 
@@ -182,12 +188,10 @@ export async function usuarioEspecifico(req, res) {
             return res.status(404).json({ message: 'Usuario no encontrado' });
         }
 
-        // Determinar el rol
         const esInversor = usuario.inversores?.length > 0;
         const esStartup = usuario.startups?.length > 0;
 
         if (esInversor) {
-            // Lógica para inversor
             const inversor = await prisma.inversor.findUnique({
                 where: { id_usuario: usuario.id },
                 include: {
@@ -196,23 +200,16 @@ export async function usuarioEspecifico(req, res) {
                             username: true,
                             seguidores: true,
                             suscriptores: true,
-                            fecha_creacion: true,
                             avatar: true,
-                            pais: true,
-                            ciudad: true,
-                            eventosCreados: true,
-                            eventosParticipados: true
+                            Contacto: true,
+                            grupos: {
+                                include: {
+                                    grupo: true,
+                                }, 
+                            }
                         },
                     },
-                    inversiones: {
-                        include: {
-                            startup: {
-                                select: {
-                                    sector: true,
-                                },
-                            },
-                        },
-                    },
+                    inversiones: true,
                     portfolio: true,
                     resenas: true,
                 },
@@ -222,54 +219,59 @@ export async function usuarioEspecifico(req, res) {
                 return res.status(404).json({ message: 'Inversor no encontrado' });
             }
 
-            // Calcular el sector favorito
-            const sectores = inversor.inversiones.reduce((acc, inv) => {
-                const sector = inv.startup?.sector || 'Desconocido';
-                acc[sector] = (acc[sector] || 0) + 1;
-                return acc;
-            }, {});
-
-            const sectorFavorito = Object.keys(sectores).reduce((a, b) => (sectores[a] > sectores[b] ? a : b), 'Desconocido');
-
-            // Calcular ROI
-            let totalROI = 0;
-            let countROI = 0;
-
-            inversor.inversiones = inversor.inversiones.map((inversion) => {
-                const montoInvertido = Number(inversion.monto_invertido);
-                const valorInversion = Number(inversion.valor);
-
-                if (!montoInvertido || !valorInversion || montoInvertido <= 0) {
-                    return { ...inversion, esExitosa: false, roi: null };
-                }
-
-                const roi = ((valorInversion - montoInvertido) / montoInvertido) * 100;
-                totalROI += roi;
-                countROI++;
-
-                return { ...inversion, roi };
+            const eventosCreados = await prisma.evento.findMany({
+                where: {
+                    creador: { username: username },
+                },
+                orderBy: { fecha_evento: 'asc' },
+                select: {
+                    id: true,
+                    titulo: true,
+                    descripcion: true,
+                    fecha_evento: true,
+                    tipo: true,
+                    tipo_movimiento: true,
+                    creador: true,
+                },
             });
 
-            const puntuacionMedia =
-                inversor.resenas.length > 0
-                    ? inversor.resenas.reduce((acc, resena) => acc + parseFloat(resena.puntuacion), 0) /
-                      inversor.resenas.length
-                    : 0;
+            const eventosParticipando = await prisma.evento.findMany({
+                where: {
+                    participantes: {
+                        some: {
+                          usuario: { username: username },
+                        },
+                    },
+                },
+                orderBy: { fecha_evento: 'asc' },
+                select: {
+                    id: true,
+                    titulo: true,
+                    descripcion: true,
+                    fecha_evento: true,
+                    tipo: true,
+                    tipo_movimiento: true,
+                    creador: true,
+                },
+            });
 
-            const roiPromedio = countROI > 0 ? totalROI / countROI : 0;
+            const eventos = [
+                ...eventosCreados.map(evento => ({ ...evento, esCreador: true, esParticipante: false })),
+                ...eventosParticipando.map(evento => ({ ...evento, esCreador: false, esParticipante: true })),
+            ];
 
             return res.json({
                 inversor,
+                eventos,
                 seguidores: inversor.usuario.seguidores.length,
                 suscriptores: inversor.usuario.suscriptores.length,
                 inversionesRealizadas: inversor.inversiones.length,
-                roiPromedio: roiPromedio.toFixed(2),
-                puntuacionMedia: puntuacionMedia.toFixed(2),
-                sectorFavorito,
+                roiPromedio: 0, // Asegúrate de calcular el ROI si lo necesitas
+                puntuacionMedia: 0, // Asegúrate de calcular la puntuación media si lo necesitas
+                grupos: inversor.usuario.grupos,
+                contacto: inversor.usuario.Contacto,
             });
-}
-        else if (esStartup) {
-            // Lógica para la startup
+        } else if (esStartup) {
             const startup = await prisma.startup.findFirst({
                 where: { id_usuario: usuario.id },
                 include: {
@@ -277,16 +279,15 @@ export async function usuarioEspecifico(req, res) {
                         select: {
                             seguidores: true,
                             username: true,
-                            fecha_creacion: true,
-                            eventosCreados: true,
-                            eventosParticipados: true
+                            Contacto: true,
+                            grupos: {
+                                include: {
+                                    grupo: true,
+                                }, 
+                            }
                         },
                     },
-                    inversiones: {
-                        include: {
-                            inversor: true,
-                        },
-                    },
+                    inversiones: true,
                 },
             });
 
@@ -294,98 +295,69 @@ export async function usuarioEspecifico(req, res) {
                 return res.status(404).json({ message: 'Startup no encontrada' });
             }
 
-            const recaudacionTotal = startup.inversiones.reduce((total, inversion) => total + parseFloat(inversion.monto_invertido), 0);
+            const recaudacionTotal = startup.inversiones.reduce(
+                (total, inversion) => total + parseFloat(inversion.monto_invertido), 
+                0
+            );
 
-            return res.json({
-                startup,
-                seguidores: startup.usuario.seguidores.length,
-                inversores: startup.inversiones.length,
-                recaudacionTotal,
-            });
-        }
-
-        return res.status(401).json({ message: 'Rol no válido' });
-
-    } catch (error) {
-        console.error(error);
-        return res.status(500).json({ error: 'Error al recuperar datos del usuario' });
-    }
-}
-
-export async function startupEspecifica (req, res) {
-    const token = req.cookies.token;
-    const { startupId } = req.params;
-
-    if (!token) {
-        return res.status(402).json({ message: 'Token no proporcionado' });
-    }
-
-    try {
-        const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-        const userId = decodedToken.userId;
-
-        if (!userId) {
-            return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
-        }
-
-        // Convertir startupId a entero
-        const startupIdInt = parseInt(startupId, 10);
-
-        if (isNaN(startupIdInt)) {
-            return res.status(400).json({ message: 'ID de startup no válido' });
-        }
-
-        // Recuperar datos de la startup por su ID
-        const startup = await prisma.startup.findUnique({
-            where: { id: startupIdInt }, // Usar el ID como entero
-            include: {
-                usuario: {
-                    select: {
-                        seguidores: true,
-                        username: true,
-                        avatar: true,
-                    },
+            const eventosCreados = await prisma.evento.findMany({
+                where: {
+                    creador: { username: username },
                 },
-                inversiones: {
-                    include: {
-                        inversor: {
-                            select: {
-                                nombre: true,
-                            },
+                orderBy: { fecha_evento: 'asc' },
+                select: {
+                    id: true,
+                    titulo: true,
+                    descripcion: true,
+                    fecha_evento: true,
+                    tipo: true,
+                    tipo_movimiento: true,
+                    creador: true,
+                },
+            });
+
+            const eventosParticipando = await prisma.evento.findMany({
+                where: {
+                    participantes: {
+                        some: {
+                          usuario: { username: username },
                         },
                     },
                 },
-            },
-        }); 
+                orderBy: { fecha_evento: 'asc' },
+                select: {
+                    id: true,
+                    titulo: true,
+                    descripcion: true,
+                    fecha_evento: true,
+                    tipo: true,
+                    tipo_movimiento: true,
+                    creador: true,
+                },
+            });
 
-        if (!startup) {
-            return res.status(404).json({ error: 'Startup no encontrada' });
+            const eventos = [
+                ...eventosCreados.map(evento => ({ ...evento, esCreador: true, esParticipante: false })),
+                ...eventosParticipando.map(evento => ({ ...evento, esCreador: false, esParticipante: true })),
+            ];
+
+            return res.json({
+                startup,
+                eventos,
+                seguidores: startup.usuario.seguidores.length,
+                inversores: startup.inversiones.length,
+                recaudacionTotal,
+                contacto: startup.usuario.Contacto,
+                grupos: startup.usuario.grupos,
+            });
         }
 
-        // Calcular la recaudación total
-        const recaudacionTotal = startup.inversiones.reduce((total, inversion) => {
-            return total + parseFloat(inversion.monto_invertido);
-        }, 0);
-
-        res.json({
-            id: startup.id,
-            nombre: startup.nombre,
-            sector: startup.sector,
-            plantilla: startup.plantilla,
-            estado_financiacion: startup.estado_financiacion,
-            porcentaje_disponible: startup.porcentaje_disponible,
-            valoracion: startup.valoracion,
-            username: startup.usuario.username,
-            avatar: startup.usuario.avatar,
-            seguidores: startup.usuario.seguidores.length,
-            inversores: startup.inversiones.length,
-            recaudacionTotal,
-        });
+        return res.status(400).json({ message: 'Usuario no tiene ni rol de inversor ni de startup' });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Error al recuperar datos de la startup' });
+        console.error('Error en usuarioEspecifico:', error);
+        return res.status(500).json({ message: 'Error interno del servidor' });
     }
-};
+}
 
 
 export async function startupsRecomendadas (req, res) {
