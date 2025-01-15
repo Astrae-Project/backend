@@ -148,43 +148,53 @@ export const loginOut = async (req, res) => {
 };
 
 export const tokenController = async (req, res, next) => {
-  const refreshToken = req.cookies.refreshToken; // Asegúrate de que estás extrayendo correctamente el refresh token
+  const refreshToken = req.cookies.refreshToken; // Asegúrate de extraer correctamente el refreshToken
 
   try {
     if (!refreshToken) {
       return res.status(403).json({ message: "No refresh token provided" });
     }
 
-    // Decodificar el refresh token para obtener el userId
-    jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET, async (err, decoded) => {
-      if (err) {
-        return res.status(403).json({ message: "Failed to authenticate token" });
-      }
-
-      // Extraemos el userId del payload del refresh token
-      const { userId } = decoded;
-
-      // Buscar al usuario en la base de datos utilizando el userId
-      const user = await prisma.usuario.findUnique({ where: { id: userId } }); // Ajusta según tu ORM (Mongoose, Sequelize, etc.)
-
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      // Generar un nuevo access token usando los datos del usuario
-      const accessToken = generateAccessToken(user)
-
-      // Establecer el nuevo access token en la cookie HttpOnly
-      res.cookie('token', accessToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // Solo si estás usando HTTPS
-        maxAge: 60 * 60 * 1000, // 1 hora
-        sameSite: 'Strict', // Protege contra ataques CSRF
-        path: '/', // Establece el path adecuado para las cookies
+    // Verifica y decodifica el refresh token
+    const decoded = await new Promise((resolve, reject) => {
+      jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET, (err, decoded) => {
+        if (err) {
+          console.error("Error al verificar el refresh token:", err);
+          return reject(new Error("Failed to authenticate token"));
+        }
+        resolve(decoded);
       });
-
-      return res.status(200).json({ message: "Token refreshed successfully", accessToken });
     });
+
+    console.log("Token decodificado:", decoded);
+
+    // Extraemos el userId del payload del refresh token
+    const { userId } = decoded;
+
+    // Buscar al usuario en la base de datos utilizando el userId
+    const user = await prisma.usuario.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    console.log("Usuario encontrado:", user);
+
+    // Generar un nuevo access token usando los datos del usuario
+    const accessToken = generateAccessToken(user);
+
+    console.log("Access token generado:", accessToken);
+
+    // Establecer el nuevo access token en la cookie HttpOnly
+    res.cookie('token', accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 1000, // 1 hora
+      sameSite: 'Strict',
+      path: '/',
+    });
+
+    return res.status(200).json({ message: "Token refreshed successfully", accessToken });
   } catch (error) {
     console.error("Error en el tokenController:", error);
     next(error);
