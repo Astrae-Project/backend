@@ -3,25 +3,23 @@ import jwt from 'jsonwebtoken';
 
 export const follow = async (req, res) => {
   const { id_seguido } = req.body;
-
   const token = req.cookies.token;
 
   if (!token) {
     return res.status(401).json({ message: 'Token no proporcionado' });
   }
 
-  const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-  const userId = decodedToken.userId;
-
-  if (!userId) {
-    return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
+  let decodedToken;
+  try {
+    decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (error) {
+    return res.status(401).json({ message: 'Token inválido' });
   }
 
-  const id_seguidor = userId;
+  const id_seguidor = decodedToken.userId;
 
-  // Validar que el ID del seguidor se obtuvo correctamente
   if (!id_seguidor) {
-    return res.status(400).json({ message: 'ID de usuario no encontrado en el token.' });
+    return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
   }
 
   // Validar que no se intente seguir a sí mismo
@@ -55,6 +53,7 @@ export const follow = async (req, res) => {
     return res.status(500).json({ error: 'Error interno del servidor.' });
   }
 };
+
 
 export const unfollow = async (req, res) => {
   const { id_seguido } = req.body;

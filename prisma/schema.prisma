@@ -43,31 +43,49 @@ model Sesion {
 }
 
 model Inversor {
-  id               Int         @id @default(autoincrement())
-  id_usuario       Int         @unique
-  nombre           String      @db.VarChar(255)
-  perfil_inversion String
-  inversiones      Inversion[]
-  usuario          Usuario     @relation(fields: [id_usuario], references: [id])
-  ofertas          Oferta[]
-  portfolio        Portfolio?
-  resenas          Resena[]
+  id                  Int                  @id @default(autoincrement())
+  id_usuario          Int                  @unique
+  nombre              String               @db.VarChar(255)
+  perfil_inversion    String
+  inversiones         Inversion[]
+  usuario             Usuario              @relation(fields: [id_usuario], references: [id])
+  ofertas             Oferta[]
+  portfolio           Portfolio?
+  resenas             Resena[]
+  portfolio_historico PortfolioHistorico[]
+}
+
+model PortfolioHistorico {
+  id         Int      @id @default(autoincrement())
+  inversorId Int
+  valoracion Decimal  @db.Decimal(12, 2)
+  fecha      DateTime @default(now())
+  inversor   Inversor @relation(fields: [inversorId], references: [id], onDelete: Cascade)
 }
 
 model Startup {
-  id                    Int         @id @default(autoincrement())
-  id_usuario            Int         @unique
-  nombre                String      @db.VarChar(255)
-  sector                String      @db.VarChar(255)
-  estado_financiacion   String      @db.VarChar(255)
+  id                    Int                   @id @default(autoincrement())
+  id_usuario            Int                   @unique
+  nombre                String                @db.VarChar(255)
+  sector                String                @db.VarChar(255)
+  estado_financiacion   String                @db.VarChar(255)
   plantilla             Int?
-  porcentaje_disponible Decimal     @default(100) @db.Decimal(5, 2)
-  valoracion            Decimal?    @db.Decimal(12, 2)
+  porcentaje_disponible Decimal               @default(100) @db.Decimal(5, 2)
+  valoracion            Decimal?              @db.Decimal(12, 2)
   chatbots              Chatbot[]
   inversiones           Inversion[]
   ofertas               Oferta[]
-  usuario               Usuario     @relation(fields: [id_usuario], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  usuario               Usuario               @relation(fields: [id_usuario], references: [id], onDelete: NoAction, onUpdate: NoAction)
   resenas               Resena[]
+  valoracion_historica  ValoracionHistorica[]
+}
+
+model ValoracionHistorica {
+  id         Int      @id @default(autoincrement())
+  startupId  Int
+  valoracion Decimal  @db.Decimal(12, 2)
+  fecha      DateTime @default(now())
+  startup    Startup  @relation(fields: [startupId], references: [id], onDelete: Cascade)
 }
 
 model Inversion {

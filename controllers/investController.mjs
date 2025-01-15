@@ -1,10 +1,22 @@
 import prisma from '../lib/prismaClient.mjs';
+import jwt from 'jsonwebtoken';
 import { actualizarValoresInversiones, calcularValoracion, calcularValorTotalPortfolio } from '../lib/functionCalculations.mjs';
 
 // Función para crear una oferta
 export const offer = async (req, res) => {
-  const { userId } = req.user || {};
+  const token = req.cookies.token;
   const { id_startup, monto_ofrecido, porcentaje_ofrecido } = req.body;
+
+  if (!token) {
+      return res.status(402).json({ message: 'Token no proporcionado' });
+  }
+
+  const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+  const userId = decodedToken.userId;
+
+  if (!userId) {
+      return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
+  }
 
   if (!id_startup || !monto_ofrecido || !porcentaje_ofrecido) {
     return res.status(400).json({ message: 'Faltan campos requeridos' });
@@ -93,11 +105,13 @@ export const offerAccepted = async (req, res) => {
   const ofertaId = parseInt(req.params.id_oferta);
   const userId = parseInt(req.params.id_usuario);
 
+  // Verificar que el usuario esté autenticado
   if (!userId) {
     return res.status(401).json({ message: 'Usuario no autenticado' });
   }
 
   try {
+    // Obtener la oferta y verificar su existencia
     const oferta = await prisma.oferta.findUnique({
       where: { id: ofertaId },
       include: { startup: true, escrow: true },
@@ -107,10 +121,12 @@ export const offerAccepted = async (req, res) => {
       return res.status(404).json({ message: 'Oferta no encontrada' });
     }
 
+    // Verificar que el usuario tenga permisos sobre la startup
     if (oferta.startup.id_usuario !== userId) {
       return res.status(403).json({ message: 'No tienes permiso para aceptar esta oferta' });
     }
 
+    // Verificar que el porcentaje ofrecido esté disponible
     const porcentajeDisponible = await getPorcentajeDisponible(oferta.id_startup);
     const porcentajeOfrecido = parseFloat(oferta.porcentaje_ofrecido);
 
@@ -118,13 +134,16 @@ export const offerAccepted = async (req, res) => {
       return res.status(400).json({ message: 'El porcentaje ofrecido es mayor que el porcentaje disponible' });
     }
 
+    // Verificar que la oferta no haya sido aceptada o rechazada previamente
     if (oferta.estado === 'aceptada' || oferta.estado === 'rechazada') {
       return res.status(400).json({ message: 'Esta oferta ya ha sido aceptada o rechazada' });
     }
 
     let nuevaInversion;
 
+    // Ejecutar la transacción principal
     await prisma.$transaction(async (prisma) => {
+      // Actualizar el estado de la oferta y el escrow
       await prisma.oferta.update({
         where: { id: ofertaId },
         data: { estado: 'aceptada' },
@@ -135,16 +154,18 @@ export const offerAccepted = async (req, res) => {
         data: { estado: 'aceptado' },
       });
 
+      // Crear una nueva inversión
       nuevaInversion = await prisma.inversion.create({
         data: {
           id_inversor: oferta.id_inversor,
           id_startup: oferta.id_startup,
           monto_invertido: oferta.monto_ofrecido,
           porcentaje_adquirido: oferta.porcentaje_ofrecido,
-          valor: 0,
+          valor: 0, // Inicialmente 0, se actualizará después
         },
       });
 
+      // Asociar la inversión al portfolio del inversor
       await prisma.portfolio.update({
         where: { id_inversor: oferta.id_inversor },
         data: {
@@ -154,6 +175,7 @@ export const offerAccepted = async (req, res) => {
         },
       });
 
+      // Actualizar el porcentaje disponible de la startup
       await prisma.startup.update({
         where: { id: oferta.id_startup },
         data: {
@@ -164,10 +186,11 @@ export const offerAccepted = async (req, res) => {
       });
     });
 
-    // Obtener la valoración de la startup y calcular el valor de la nueva inversión
+    // Calcular el valor de la inversión basada en la valoración de la startup
     const valoracion = await calcularValoracion(oferta.id_startup);
     const valor = (valoracion * (oferta.porcentaje_ofrecido / 100));
 
+    // Actualizar el valor de la inversión
     await prisma.inversion.update({
       where: { id: nuevaInversion.id },
       data: { valor: valor },
@@ -175,8 +198,27 @@ export const offerAccepted = async (req, res) => {
 
     // Actualizar todas las inversiones relacionadas con la startup
     await actualizarValoresInversiones(oferta.id_startup, valoracion);
-    
+
+    // Registrar la valoración histórica de la startup
+    await prisma.ValoracionHistorica.create({
+      data: {
+        startupId: oferta.id_startup,
+        valoracion: valoracion,
+        fecha: new Date(),
+      },
+    });
+
+    // Calcular y registrar el valor total del portfolio del inversor
     const valorPortfolio = await calcularValorTotalPortfolio(oferta.id_inversor);
+    console.log('Valor total del portfolio:', valorPortfolio);
+
+    await prisma.portfolioHistorico.create({
+      data: {
+        inversorId: oferta.id_inversor,
+        valoracion: valorPortfolio,
+        fecha: new Date(),
+      },
+    });
 
     res.status(200).json({ message: 'Oferta aceptada y guardada en el portfolio con éxito' });
   } catch (err) {
@@ -184,7 +226,6 @@ export const offerAccepted = async (req, res) => {
     res.status(500).json({ message: 'Error al aceptar la oferta' });
   }
 };
-
 
 // Función para rechazar una oferta
 export const offerRejected = async (req, res) => {
@@ -377,6 +418,16 @@ export const acceptCounteroffer = async (req, res) => {
         valor: valor, // Actualizar el valor calculado
       },
     });
+
+    // Registrar la valoración histórica de la startup
+    await prisma.ValoracionHistorica.create({
+      data: {
+        startupId: oferta.id_startup,
+        valoracion: valoracion,
+        fecha: new Date(),
+      },
+    });
+    
 
     // Actualizar todos los valores de las inversiones relacionadas
     await actualizarValoresInversiones(oferta.id_startup, valoracion);

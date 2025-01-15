@@ -1,10 +1,9 @@
 import express from 'express';
 import { offer, offerAccepted, offerRejected, counteroffer, acceptCounteroffer, rejectCounteroffer } from '../controllers/investController.mjs';
-//import { authorizeRole } from '../middlewares/rolMiddleware.mjs';
 
 const router = express.Router();
 
-router.post('/oferta/:id', offer)
+router.post('/oferta', offer)
 
 router.put('/oferta/:id_oferta/aceptar/:id_usuario', offerAccepted)
 

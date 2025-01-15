@@ -165,9 +165,14 @@ export async function usuarioEspecifico(req, res) {
     try {
         const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
         const userId = decodedToken.userId;
+        const role = decodedToken.role;
 
         if (!userId) {
             return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
+        }
+
+        if (!role) {
+            return res.status(401).json({ message: 'Rol no encontrado' });
         }
 
         const usuario = await prisma.usuario.findUnique({
@@ -197,28 +202,43 @@ export async function usuarioEspecifico(req, res) {
                 include: {
                     usuario: {
                         select: {
+                            id: true,
                             username: true,
                             seguidores: true,
                             suscriptores: true,
                             avatar: true,
                             Contacto: true,
-                            grupos: {
-                                include: {
-                                    grupo: true,
-                                }, 
-                            }
+                            fecha_creacion: true,
+                            ciudad: true,
+                            pais: true,
+                            grupos: true, // Obtener los grupos directamente
                         },
                     },
-                    inversiones: true,
+                    inversiones: {
+                        include: {
+                            startup: {
+                                include: {
+                                    usuario: {
+                                        select: {
+                                            username: true,
+                                            avatar: true,
+                                            seguidores: true,
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
                     portfolio: true,
                     resenas: true,
+                    portfolio_historico: true,
                 },
             });
-
+        
             if (!inversor) {
                 return res.status(404).json({ message: 'Inversor no encontrado' });
             }
-
+                
             const eventosCreados = await prisma.evento.findMany({
                 where: {
                     creador: { username: username },
@@ -231,7 +251,12 @@ export async function usuarioEspecifico(req, res) {
                     fecha_evento: true,
                     tipo: true,
                     tipo_movimiento: true,
-                    creador: true,
+                    creador: {
+                        select: {
+                            username: true,
+                            avatar: true,
+                        },
+                    },
                 },
             });
 
@@ -251,7 +276,12 @@ export async function usuarioEspecifico(req, res) {
                     fecha_evento: true,
                     tipo: true,
                     tipo_movimiento: true,
-                    creador: true,
+                    creador: {
+                        select: {
+                            username: true,
+                            avatar: true,
+                        },
+                    },
                 },
             });
 
@@ -260,14 +290,209 @@ export async function usuarioEspecifico(req, res) {
                 ...eventosParticipando.map(evento => ({ ...evento, esCreador: false, esParticipante: true })),
             ];
 
+                    // Recuperar inversiones recientes con el usuario de la startup
+        const inversionesRecientes = await prisma.inversion.findMany({
+            where: { id_inversor: inversor.id },
+            orderBy: { fecha: 'desc' },
+            take: 10,
+            select: {
+                id: true,
+                monto_invertido: true,
+                porcentaje_adquirido: true,
+                fecha: true,
+                startup: {
+                    include: {
+                        usuario: {
+                            select: {
+                                username: true,
+                                avatar: true,
+                                seguidores: true,
+                            },
+                        },
+                     },
+                },
+            },
+        });
+
+        // Recuperar ofertas recientes con el usuario de la startup
+        const ofertasRecientes = await prisma.oferta.findMany({
+            where: { id_inversor: inversor.id },
+            orderBy: { fecha_creacion: 'desc' },
+            take: 10,
+            select: {
+                id: true,
+                monto_ofrecido: true,
+                porcentaje_ofrecido: true,
+                fecha_creacion: true,
+                estado: true,
+                startup: {
+                    include: {
+                        usuario: {
+                            select: {
+                                username: true,
+                                avatar: true,
+                                seguidores: true,
+                            },
+                        },
+                     },
+                },
+            },
+        });
+
+        // Recuperar eventos recientes creados por el usuario
+        const eventosCreadosRecientes = await prisma.evento.findMany({
+            where: { id_usuario: userId },
+            orderBy: { fecha_evento: 'desc' },
+            take: 10,
+            select: {
+                id: true,
+                titulo: true,
+                descripcion: true,
+                fecha_evento: true,
+                tipo: true,
+                fecha_creacion: true,
+                creador: {
+                    select: {
+                        username: true,
+                        avatar: true,
+                    },
+                },
+                participantes: {
+                    where: {
+                        id_usuario: userId,
+                    },
+                    select: {
+                        fecha_union: true,
+                        usuario: true,
+                    },
+                },
+            },
+        });
+
+        const eventosParticipadosRecientes = await prisma.evento.findMany({
+            where: {
+                participantes: {
+                    some: {
+                        id_usuario: userId,
+                    },
+                },
+                id_usuario: {
+                    not: userId, // Excluir eventos creados por el usuario
+                },
+            },
+            orderBy: { fecha_evento: 'desc' },
+            take: 10,
+            select: {
+                id: true,
+                titulo: true,
+                descripcion: true,
+                fecha_evento: true,
+                tipo: true,
+                creador: {
+                    select: {
+                        username: true,
+                        avatar: true,
+                    },
+                },
+                participantes: {
+                    where: {
+                        id_usuario: userId,
+                    },
+                    select: {
+                        fecha_union: true,
+                        usuario: true,
+                    },
+                },
+            },
+        });
+        
+        // Combinar todos los movimientos en un solo array
+        const movimientos = [
+            ...inversionesRecientes.map(m => ({
+                ...m,
+                tipo_movimiento: 'inversion',
+                avatar: m.startup.usuario.avatar,
+            })),
+            ...ofertasRecientes.map(m => ({
+                ...m,
+                tipo_movimiento: 'oferta',
+                avatar: m.startup.usuario.avatar,
+            })),
+            ...eventosCreadosRecientes.map(m => ({
+                ...m,
+                tipo_movimiento: 'evento',
+                avatar: m.creador.avatar,
+            })),
+            ...eventosParticipadosRecientes.map(m => ({
+                ...m,
+                tipo_movimiento: 'evento',
+                avatar: m.creador.avatar,
+            })),
+        ];
+
+        // Ordenar los movimientos por fecha (más reciente primero)
+        const movimientosOrdenados = movimientos.sort((a, b) => {
+            return new Date(b.fecha || b.fecha_creacion || b.fecha_evento) - new Date(a.fecha || a.fecha_creacion || a.fecha_evento);
+        });
+
+        // Tomar los últimos 10 movimientos
+        const ultimosMovimientos = movimientosOrdenados.slice(0, 15);
+            // Calcular el sector favorito
+            const sectores = inversor.inversiones.reduce((acc, inv) => {
+                const sector = inv.startup.sector;
+                acc[sector] = (acc[sector] || 0) + 1;
+                return acc;
+            }, {});
+
+            const sectorFavorito = Object.keys(sectores).reduce((a, b) => (sectores[a] > sectores[b] ? a : b), "Desconocido");
+
+            // Calcular el ROI y otras métricas
+            let totalROI = 0;
+            let countROI = 0;
+
+            inversor.inversiones = inversor.inversiones.map((inversion) => {
+                const montoInvertido = Number(inversion.monto_invertido);
+                const valorInversion = Number(inversion.valor);
+
+                if (isNaN(montoInvertido) || isNaN(valorInversion)) {
+                    console.error(`Inversión ID ${inversion.id}: Monto Invertido (${inversion.monto_invertido}), Valor (${inversion.valor}) no son números.`);
+                    return {
+                        ...inversion,
+                        esExitosa: false,
+                        roi: null,
+                    };
+                }
+
+                const esExitosa = montoInvertido < valorInversion;
+                const roi = calcularROI(montoInvertido, valorInversion);
+
+                if (montoInvertido > 0) {
+                    totalROI += roi;
+                    countROI++;
+                }
+
+                return {
+                    ...inversion,
+                    esExitosa,
+                    roi,
+                };
+            });
+
+            const totalPuntuacion = inversor.resenas.reduce((acc, resena) => acc + parseFloat(resena.puntuacion), 0);
+            const puntuacionMedia = inversor.resenas.length > 0 ? totalPuntuacion / inversor.resenas.length : 0;
+
+            const roiPromedio = countROI > 0 ? totalROI / countROI : 0;
+
             return res.json({
                 inversor,
                 eventos,
+                ultimosMovimientos,
+                sectorFavorito,
                 seguidores: inversor.usuario.seguidores.length,
                 suscriptores: inversor.usuario.suscriptores.length,
                 inversionesRealizadas: inversor.inversiones.length,
-                roiPromedio: 0, // Asegúrate de calcular el ROI si lo necesitas
-                puntuacionMedia: 0, // Asegúrate de calcular la puntuación media si lo necesitas
+                roiPromedio: roiPromedio.toFixed(2),
+                puntuacionMedia: puntuacionMedia, // Asegúrate de calcular la puntuación media si lo necesitas
                 grupos: inversor.usuario.grupos,
                 contacto: inversor.usuario.Contacto,
             });
@@ -277,9 +502,14 @@ export async function usuarioEspecifico(req, res) {
                 include: {
                     usuario: {
                         select: {
+                            id: true,
                             seguidores: true,
                             username: true,
                             Contacto: true,
+                            fecha_creacion: true,
+                            ciudad: true,
+                            pais: true,
+                            avatar: true,
                             grupos: {
                                 include: {
                                     grupo: true,
@@ -288,6 +518,7 @@ export async function usuarioEspecifico(req, res) {
                         },
                     },
                     inversiones: true,
+                    valoracion_historica: true,
                 },
             });
 
@@ -312,7 +543,12 @@ export async function usuarioEspecifico(req, res) {
                     fecha_evento: true,
                     tipo: true,
                     tipo_movimiento: true,
-                    creador: true,
+                    creador: {
+                        select: {
+                            username: true,
+                            avatar: true,
+                        },
+                    },
                 },
             });
 
@@ -332,7 +568,12 @@ export async function usuarioEspecifico(req, res) {
                     fecha_evento: true,
                     tipo: true,
                     tipo_movimiento: true,
-                    creador: true,
+                    creador: {
+                        select: {
+                            username: true,
+                            avatar: true,
+                        },
+                    },
                 },
             });
 
@@ -396,7 +637,7 @@ export async function startupsRecomendadas (req, res) {
 };
 
 
-  export async function startupsSeguidas (req, res)  {
+export async function startupsSeguidas (req, res)  {
     try {
         const token = req.cookies.token;
 
@@ -850,3 +1091,64 @@ export async function obtenerEventos(req, res) {
       res.status(500).json({ error: 'Error al recuperar eventos.' });
     }
   }
+
+export async function obtenerHistoricos(req, res) {
+    const token = req.cookies.token;
+
+    if (!token) {
+        return res.status(402).json({ message: 'Token no proporcionado' });
+    }
+
+    try {
+        const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+        const userId = decodedToken.userId;
+        const role = decodedToken.role;
+
+        if (!userId) {
+            return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
+        }
+
+        // Verificar el rol del usuario
+        if (role === 'inversor') {
+            // Lógica para el inversor
+            const inversor = await prisma.inversor.findFirst({
+                where: { id_usuario: userId },
+                include: {
+                    portfolio_historico: true,
+                },
+            });
+
+            if (!inversor) {
+                return res.status(404).json({ message: 'Inversor no encontrado' });
+            }
+
+            res.json({
+                historico: inversor.portfolio_historico,
+            });
+
+        } else if (role === 'startup') {
+            // Lógica para la startup
+            const startup = await prisma.startup.findFirst({
+                where: { id_usuario: userId },
+                include: {
+                    valoracion_historica: true,
+                },
+            });
+
+            if (!startup) {
+                return res.status(404).json({ error: 'Startup no encontrada' });
+            }
+
+            res.json({
+                historico: startup.valoracion_historica,
+            });
+        } else {
+            return res.status(401).json({ message: 'Rol no válido' });
+        }
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al recuperar datos del usuario' });
+    }
+  };
+    
