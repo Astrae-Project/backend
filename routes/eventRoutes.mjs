@@ -1,7 +1,9 @@
 import express from 'express';
-import { changeEvent, createEvent, dataEvent, desapuntarseEvento, dropEvent, inscribirEvento } from '../controllers/eventControllers.mjs';
+import { changeEvent, createEvent, dataEvent, desapuntarseEvento, dropEvent, inscribirEvento, buscarEventos } from '../controllers/eventControllers.mjs';
 
 const router = express.Router();
+
+router.get('/todos', buscarEventos);
 
 router.post('/crear', createEvent);
 

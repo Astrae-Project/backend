@@ -600,6 +600,39 @@ export async function usuarioEspecifico(req, res) {
     }
 }
 
+export async function todasStartups (req, res) {
+    try {
+        // Obtener startups aleatorias
+        const startups = await prisma.startup.findMany({
+            orderBy: {
+                id: 'desc',
+            },
+            include: {
+                usuario: {
+                    select: {
+                        username: true,
+                        avatar: true,
+                        seguidores: true
+                    },
+                },
+                inversiones: {
+                    include: {
+                        inversor: true,
+                    },
+                },
+            },
+        });
+
+        if (!startups || startups.length === 0) {
+            return res.status(404).json({ message: 'No se encontraron startups' });
+        }
+
+        res.json({ startups });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error al recuperar las startups' });
+    }
+};
 
 export async function startupsRecomendadas (req, res) {
     try {

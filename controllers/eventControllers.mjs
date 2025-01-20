@@ -223,7 +223,7 @@ export const inscribirEvento = async (req, res) => {
       const userId = decodedToken.userId;
   
       if (!eventoId || !userId) {
-        return res.status(400).json({ message: 'ID del evento y ID del usuario son requeridos' });
+        return res.status(402).json({ message: 'ID del evento y ID del usuario son requeridos' });
       }
   
       const parsedEventoId = parseInt(eventoId, 10);
@@ -231,7 +231,7 @@ export const inscribirEvento = async (req, res) => {
   
       // Verifica si los IDs son números válidos
       if (isNaN(parsedEventoId) || isNaN(parsedUsuarioId)) {
-        return res.status(400).json({ message: 'ID de evento o usuario inválido' });
+        return res.status(403).json({ message: 'ID de evento o usuario inválido' });
       }
   
       // Verifica si el evento existe
@@ -254,7 +254,7 @@ export const inscribirEvento = async (req, res) => {
       });
   
       if (yaInscrito) {
-        return res.status(400).json({ message: 'El usuario ya está inscrito en este evento' });
+        return res.status(405).json({ message: 'El usuario ya está inscrito en este evento' });
       }
   
       // Agregar el usuario como participante del evento
@@ -326,5 +326,19 @@ export const desapuntarseEvento = async (req, res) => {
       return res.status(500).json({ message: 'Error al desapuntarse del evento' });
     }
   };
+
+export const buscarEventos = async (req, res) => {
+    try {
+      const eventos = await prisma.evento.findMany({
+        include: {
+          creador: true,
+        },
+      });
   
+      res.status(200).json(eventos);
+    } catch (error) {
+      console.error('Error al buscar eventos:', error);
+      res.status(500).json({ message: 'Error al buscar eventos' });
+    }
+  }
   

@@ -233,7 +233,7 @@ model Participante {
   id_evento   Int
   id_usuario  Int
   fecha_union DateTime @default(now())
-  evento      Evento   @relation(fields: [id_evento], references: [id])
+  evento      Evento   @relation(fields: [id_evento], references: [id], onDelete: Cascade) // onDelete aquí
   usuario     Usuario  @relation("ParticipacionesEventos", fields: [id_usuario], references: [id])
 
   @@unique([id_evento, id_usuario])

@@ -1,5 +1,5 @@
 import express from 'express';
-import { datosUsuario, datosPortfolio, gruposUsuario, movimientosRecientes, obtenerContacto, obtenerEventos, startupsRecomendadas, usuarioEspecifico, obtenerHistoricos } from '../controllers/fetchController.mjs';
+import { datosUsuario, datosPortfolio, gruposUsuario, movimientosRecientes, obtenerContacto, obtenerEventos, startupsRecomendadas, usuarioEspecifico, obtenerHistoricos, todasStartups } from '../controllers/fetchController.mjs';
 
 const router = express.Router();
 
@@ -11,6 +11,8 @@ router.get('/usuario/:username', usuarioEspecifico)
 
 // Ruta para obtener el portfolio de un usuario (inversor o startup)
 router.get('/portfolio', datosPortfolio);
+
+router.get('/startup', todasStartups);
 
 // Ruta fija para startups aleatorias
 router.get('/startup/recomendadas', startupsRecomendadas);
