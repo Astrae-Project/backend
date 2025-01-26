@@ -1,10 +1,13 @@
 import express from 'express';
-import { createGroup, dropGroup, dataGroup, changeData, addMember, dropMember, sendMessage, seeMessage, changeRole } from '../controllers/groupControllers.mjs';
+import { createGroup, dropGroup, dataGroup, changeData, addMember, dropMember, sendMessage, seeMessage, changeRole, joinGroup } from '../controllers/groupControllers.mjs';
 
 const router = express.Router();
 
 // Crear Grupo
 router.post('/crear', createGroup);
+
+// Crear Grupo
+router.post('/unir/:grupoId', joinGroup);
 
 // Salir de Grupo
 router.delete('/salir/:grupoId', dropGroup);

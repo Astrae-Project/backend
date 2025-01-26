@@ -42,71 +42,137 @@ export const createGroup = async (req, res) => {
   }
 };
 
-  export const dropGroup = async (req, res) => {
-    try {
-      const token = req.cookies.token;
-  
-      if (!token) {
-          return res.status(401).json({ message: 'Token no proporcionado' });
-      }
-    
-      const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-      const userId = decodedToken.userId;
-  
-      if (!userId) {
-        return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
-      }
+export const joinGroup = async (req, res) => {
+  try {
+    const token = req.cookies.token;
 
-      const { grupoId } = req.params;
-      const parsedGroupId = parseInt(grupoId, 10);
-  
-      // Verifica si el grupoId es un número válido
-      if (isNaN(parsedGroupId)) {
-        return res.status(400).json({ message: 'ID de grupo inválido' });
-      }
-  
-      // Busca el grupo en la base de datos
-      const grupo = await prisma.grupo.findUnique({
-        where: {
-          id: parsedGroupId, // ID del grupo
-        },
-        include: {
-          usuarios: true, // Incluye la relación con usuarios para verificar membresía
-        },
-      });
-  
-      // Si el grupo no existe, responde con un error 404
-      if (!grupo) {
-        return res.status(404).json({ message: 'Grupo no encontrado' });
-      }
-  
-      // Verifica si el usuario que hace la solicitud es un miembro del grupo
-      const esMiembro = grupo.usuarios.some(usuario => usuario.id === userId);
-  
-      if (!esMiembro) {
-        return res.status(403).json({ message: 'No estás en este grupo' });
-      }
-  
-      // Elimina al usuario del grupo
-      await prisma.grupo.update({
-        where: {
-          id: parsedGroupId,
-        },
-        data: {
-          usuarios: {
-            disconnect: { id: userId }, // Desconecta al usuario del grupo
-          },
-        },
-      });
-  
-      // Responde con éxito
-      res.status(200).json({ message: 'Has salido del grupo con éxito' });
-    } catch (error) {
-      // Manejo de errores: registra el error y responde con un mensaje de error
-      console.error('Error al salir del grupo:', error);
-      res.status(500).json({ message: 'Error al salir del grupo' });
+    // Verifica que el token esté presente
+    if (!token) {
+      return res.status(401).json({ message: 'Token no proporcionado' });
     }
-  };
+
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decodedToken.userId;
+
+    // Verifica que el token contenga un ID de usuario
+    if (!userId) {
+      return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
+    }
+
+    const { grupoId } = req.params;
+    const parsedGroupId = parseInt(grupoId, 10);
+
+    // Verifica que el ID del grupo sea válido
+    if (isNaN(parsedGroupId)) {
+      return res.status(400).json({ message: 'ID de grupo inválido' });
+    }
+
+    // Verifica si el grupo existe
+    const grupo = await prisma.grupo.findUnique({
+      where: { id: parsedGroupId },
+    });
+
+    if (!grupo) {
+      return res.status(404).json({ message: 'Grupo no encontrado' });
+    }
+
+    // Verifica si el usuario ya está en el grupo
+    const relacionExistente = await prisma.grupoUsuario.findUnique({
+      where: {
+        id_grupo_id_usuario: {
+          id_grupo: parsedGroupId,
+          id_usuario: userId,
+        },
+      },
+    });
+
+    if (relacionExistente) {
+      return res.status(400).json({ message: 'Ya eres miembro de este grupo' });
+    }
+
+    if (grupo.tipo === 'privado') {
+      return res.status(406).json({ message: 'Este grupo es privado, necesitas una invitación para unirte' });
+    }
+
+    // Crea la relación entre el usuario y el grupo
+    await prisma.grupoUsuario.create({
+      data: {
+        id_grupo: parsedGroupId,
+        id_usuario: userId,
+        rol: 'miembro', // Asigna el rol predeterminado al usuario
+      },
+    });
+
+    res.status(201).json({ message: 'Te has unido al grupo con éxito' });
+  } catch (error) {
+    console.error('Error al unirse al grupo:', error);
+    res.status(500).json({ message: 'Error al unirse al grupo' });
+  }
+};
+
+
+export const dropGroup = async (req, res) => {
+  try {
+    const token = req.cookies.token;
+
+    if (!token) {
+      return res.status(401).json({ message: 'Token no proporcionado' });
+    }
+
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decodedToken.userId;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
+    }
+
+    const { grupoId } = req.params;
+    const parsedGroupId = parseInt(grupoId, 10);
+
+    // Verifica si el grupoId es un número válido
+    if (isNaN(parsedGroupId)) {
+      return res.status(400).json({ message: 'ID de grupo inválido' });
+    }
+
+    // Verifica si el grupo existe
+    const grupo = await prisma.grupo.findUnique({
+      where: { id: parsedGroupId },
+    });
+
+    if (!grupo) {
+      return res.status(404).json({ message: 'Grupo no encontrado' });
+    }
+
+    // Verifica si el usuario está en el grupo
+    const relacion = await prisma.grupoUsuario.findUnique({
+      where: {
+        id_grupo_id_usuario: {
+          id_grupo: parsedGroupId,
+          id_usuario: userId,
+        },
+      },
+    });
+
+    if (!relacion) {
+      return res.status(403).json({ message: 'No estás en este grupo' });
+    }
+
+    // Elimina la relación del usuario con el grupo
+    await prisma.grupoUsuario.delete({
+      where: {
+        id_grupo_id_usuario: {
+          id_grupo: parsedGroupId,
+          id_usuario: userId,
+        },
+      },
+    });
+
+    res.status(200).json({ message: 'Has salido del grupo con éxito' });
+  } catch (error) {
+    console.error('Error al salir del grupo:', error);
+    res.status(500).json({ message: 'Error al salir del grupo' });
+  }
+};
 
   export const dataGroup = async (req, res) => {
     try {

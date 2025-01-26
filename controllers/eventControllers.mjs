@@ -327,18 +327,37 @@ export const desapuntarseEvento = async (req, res) => {
     }
   };
 
-export const buscarEventos = async (req, res) => {
+  export const buscarEventos = async (req, res) => {
+    const token = req.cookies.token;
+    
+    if (!token) {
+      return res.status(401).json({ message: 'Token no proporcionado' });
+    }
+  
     try {
+      // Decodificar el token
+      const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+      const userId = decodedToken.userId;
+  
+      // Obtener eventos y sus creadores
       const eventos = await prisma.evento.findMany({
         include: {
           creador: true,
         },
       });
   
-      res.status(200).json(eventos);
+      // Agregar propiedad `esCreador` para cada evento
+      const eventosConPropiedad = eventos.map(evento => ({
+        ...evento,
+        esCreador: evento.creador.id === userId, // Verificar si el usuario es el creador
+      }));
+  
+      // Enviar los eventos modificados
+      res.status(200).json(eventosConPropiedad);
     } catch (error) {
       console.error('Error al buscar eventos:', error);
       res.status(500).json({ message: 'Error al buscar eventos' });
     }
-  }
+  };
+  
   

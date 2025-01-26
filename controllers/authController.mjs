@@ -16,7 +16,6 @@ export const registerUser = async (req, res) => {
   }
 
   try {
-    console.log('Verificando si el usuario ya existe...');
     const existingUser = await prisma.usuario.findUnique({
       where: { email },
     });
@@ -26,10 +25,8 @@ export const registerUser = async (req, res) => {
       return res.status(400).json({ message: 'El usuario ya existe' });
     }
 
-    console.log('Hasheando la contraseña...');
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    console.log('Creando nuevo usuario...');
     const newUser = await prisma.usuario.create({
       data: {
         email,
@@ -39,6 +36,13 @@ export const registerUser = async (req, res) => {
     });
 
     const userId = newUser.id;
+
+    const newContact = await prisma.contacto.create({
+      data: {
+        id_usuario: userId,
+        correo: email,
+      },
+    });
 
     // Crear tokens
     const accessToken = jwt.sign(

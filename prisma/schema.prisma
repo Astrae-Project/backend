@@ -249,8 +249,8 @@ model Chatbot {
 
 model Contacto {
   id         Int     @id @default(autoincrement())
-  id_usuario Int
-  correo     String? @unique
+  id_usuario Int     @unique
+  correo     String?
   twitter    String?
   linkedin   String?
   facebook   String?

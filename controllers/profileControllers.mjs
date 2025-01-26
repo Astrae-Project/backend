@@ -1,49 +1,61 @@
 import prisma from "../lib/prismaClient.mjs";
 import jwt from 'jsonwebtoken';
 
-// Endpoint para guardar la información de contacto
 export async function saveContact(req, res) {
     const { correo, twitter, linkedin, facebook, instagram, otros } = req.body;
     const token = req.cookies.token;
 
+    // Verificar si el token está presente
     if (!token) {
         return res.status(401).json({ message: 'Token no proporcionado' });
     }
 
     try {
+        // Verificar y decodificar el token JWT
         const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-        const userId = decodedToken.userId;
+        const userId = decodedToken?.userId;
 
         if (!userId) {
             return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
         }
 
-        // Guardar o actualizar la información de contacto
-        const contacto = await prisma.contacto.upsert({
-            where: { id_usuario: userId }, // Si ya existe, actualizar
-            update: {
-                correo,
-                twitter,
-                linkedin,
-                facebook,
-                instagram,
-                otros,
-            },
-            create: {
-                id_usuario: userId,
-                correo,
-                twitter,
-                linkedin,
-                facebook,
-                instagram,
-                otros,
+        // Validar que al menos un campo se envió para actualizar
+        if (![correo, twitter, linkedin, facebook, instagram, otros].some(field => field !== undefined)) {
+            return res.status(400).json({ message: 'Debe proporcionar al menos un campo para actualizar' });
+        }
+
+        // Buscar el contacto existente en la base de datos
+        const contactoExistente = await prisma.contacto.findUnique({
+            where: { id_usuario: userId },
+        });
+
+        if (!contactoExistente) {
+            return res.status(404).json({ message: 'No se encontró el registro para actualizar' });
+        }
+
+        // Actualizar los datos preservando valores existentes si no se envían
+        const contactoActualizado = await prisma.contacto.update({
+            where: { id_usuario: userId },
+            data: {
+                correo: correo !== undefined ? correo : contactoExistente.correo,
+                twitter: twitter !== undefined ? twitter : contactoExistente.twitter,
+                linkedin: linkedin !== undefined ? linkedin : contactoExistente.linkedin,
+                facebook: facebook !== undefined ? facebook : contactoExistente.facebook,
+                instagram: instagram !== undefined ? instagram : contactoExistente.instagram,
+                otros: otros !== undefined ? otros : contactoExistente.otros,    
             },
         });
 
-        res.json(contacto);
+        // Responder con los datos actualizados
+        res.status(200).json({ message: 'Contacto actualizado con éxito', data: contactoActualizado });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Error al guardar la información de contacto' });
+        console.error('Error al actualizar la información de contacto:', error);
+
+        if (error.name === 'JsonWebTokenError') {
+            return res.status(401).json({ message: 'Token inválido o expirado' });
+        }
+
+        res.status(500).json({ message: 'Error interno del servidor' });
     }
 }
 
@@ -118,3 +130,4 @@ export async function darPuntuacion(req, res) {
         return res.status(500).json({ error: "Error al crear la reseña" });
     }
 }
+
