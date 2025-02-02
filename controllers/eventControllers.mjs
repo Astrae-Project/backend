@@ -59,30 +59,50 @@ export const dropEvent = async (req, res) => {
     const { eventoId } = req.params;
     const parsedEventoId = parseInt(eventoId, 10);
 
-    // Verifica si el eventoId es un número válido
     if (isNaN(parsedEventoId)) {
       return res.status(400).json({ message: 'ID de evento inválido' });
     }
 
-    // Busca el evento en la base de datos
+    // Obtener el evento y sus participantes
     const evento = await prisma.evento.findUnique({
       where: { id: parsedEventoId },
-      include: { creador: true }, // Incluye el creador para verificar
+      include: {
+        creador: true,
+        participantes: {
+          select: { id_usuario: true }, // Obtenemos solo los IDs de los participantes
+        },
+      },
     });
 
-    // Si el evento no existe, responde con un error 404
     if (!evento) {
       return res.status(404).json({ message: 'Evento no encontrado' });
     }
 
-    // Verifica si el usuario que hace la solicitud es el creador del evento
     if (evento.creador.id !== userId) {
       return res.status(403).json({ message: 'No tienes permisos para eliminar este evento' });
     }
 
-    // Elimina el evento y todas las relaciones asociadas
+    // Extraer IDs de los participantes
+    const usuariosIds = evento.participantes.map(p => p.id_usuario);
+
+    // Eliminar el evento (esto eliminará automáticamente a los participantes por CASCADE)
     await prisma.evento.delete({
       where: { id: parsedEventoId },
+    });
+
+    // Obtener a los participantes del evento
+    const participantes = await prisma.participante.findMany({
+      where: { id_evento: parsedEventoId },
+      select: { id_usuario: true },
+    });
+      
+    // Crear notificaciones para los participantes
+    await prisma.notificacion.createMany({
+      data: participantes.map((p) => ({
+        id_usuario: p.id_usuario,
+        contenido: `El evento "${evento.titulo}" ha sido eliminado`,
+        tipo: 'evento',
+      })),
     });
 
     res.status(200).json({ message: 'Evento eliminado con éxito' });
@@ -158,57 +178,80 @@ export const dataEvent = async (req, res) => {
     }
   };  
 
-export const changeEvent = async (req, res) => {
-  try {
-    const token = req.cookies.token;
-
-    if (!token) {
-      return res.status(401).json({ message: 'Token no proporcionado' });
+  export const changeEvent = async (req, res) => {
+    try {
+      const token = req.cookies.token;
+  
+      if (!token) {
+        return res.status(401).json({ message: 'Token no proporcionado' });
+      }
+  
+      const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+      const userId = parseInt(decodedToken.userId, 10);
+  
+      if (!userId) {
+        return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
+      }
+  
+      const { eventoId } = req.params;
+      const { titulo, descripcion, tipo, fecha_evento } = req.body;
+  
+      // Verificar si el evento existe y obtener su creador
+      const evento = await prisma.evento.findUnique({
+        where: { id: parseInt(eventoId, 10) },
+        include: { creador: true },
+      });
+  
+      if (!evento) {
+        return res.status(404).json({ message: 'Evento no encontrado' });
+      }
+  
+      // Verifica si el usuario es el creador del evento
+      if (evento.creador.id !== userId) {
+        return res.status(403).json({ message: 'No tienes permisos para realizar esta acción' });
+      }
+  
+      // Determinar qué cambios se realizaron
+      const cambios = [];
+      if (titulo && titulo !== evento.titulo) cambios.push(`Título: "${evento.titulo}" → "${titulo}"`);
+      if (descripcion && descripcion !== evento.descripcion) cambios.push(`Descripción actualizada`);
+      if (tipo && tipo !== evento.tipo) cambios.push(`Tipo cambiado a "${tipo}"`);
+      if (fecha_evento && new Date(fecha_evento).toISOString() !== evento.fecha_evento.toISOString()) {
+        cambios.push(`Fecha del evento: "${evento.fecha_evento.toISOString()}" → "${new Date(fecha_evento).toISOString()}"`);
+      }
+  
+      // Si no hay cambios, no actualizar ni notificar
+      if (cambios.length === 0) {
+        return res.status(200).json({ message: 'No se realizaron cambios en el evento' });
+      }
+  
+      // Actualizar los detalles del evento
+      const updatedEvento = await prisma.evento.update({
+        where: { id: parseInt(eventoId, 10) },
+        data: { titulo, descripcion, tipo, fecha_evento: fecha_evento ? new Date(fecha_evento) : undefined },
+      });
+  
+      // Obtener a los participantes del evento
+      const participantes = await prisma.participante.findMany({
+        where: { id_evento: parseInt(eventoId, 10) },
+        select: { id_usuario: true },
+      });
+  
+      // Crear notificaciones para los participantes
+      await prisma.notificacion.createMany({
+        data: participantes.map((p) => ({
+          id_usuario: p.id_usuario,
+          contenido: `El evento "${evento.titulo}" ha cambiado: ${cambios.join(', ')}`,
+          tipo: 'evento',
+        })),
+      });
+  
+      return res.status(200).json({ message: 'Evento actualizado y notificaciones enviadas', evento: updatedEvento });
+    } catch (error) {
+      console.error('Error al cambiar la información del evento:', error);
+      return res.status(500).json({ message: 'Error al cambiar la información del evento' });
     }
-
-    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-    const userId = decodedToken.userId;
-
-    if (!userId) {
-      return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
-    }
-
-    const { eventoId } = req.params;
-    const { titulo, descripcion, tipo, fecha_evento } = req.body;
-
-    // Verificar si el evento existe y obtener su creador
-    const evento = await prisma.evento.findUnique({
-      where: { id: parseInt(eventoId, 10) },
-      include: { creador: true },
-    });
-
-    if (!evento) {
-      return res.status(404).json({ message: 'Evento no encontrado' });
-    }
-
-    // Verifica si el usuario es el creador del evento
-    if (evento.creador.id !== userId) {
-      return res.status(403).json({ message: 'No tienes permisos para realizar esta acción' });
-    }
-
-    // Actualizar los detalles del evento
-    const updatedFields = {};
-    if (titulo) updatedFields.titulo = titulo;
-    if (descripcion) updatedFields.descripcion = descripcion;
-    if (tipo) updatedFields.tipo = tipo;
-    if (fecha_evento) updatedFields.fecha_evento = new Date(fecha_evento);
-
-    const updatedEvento = await prisma.evento.update({
-      where: { id: parseInt(eventoId, 10) },
-      data: updatedFields,
-    });
-
-    res.status(200).json(updatedEvento);
-  } catch (error) {
-    console.error('Error al cambiar la información del evento:', error);
-    res.status(500).json({ message: 'Error al cambiar la información del evento' });
-  }
-};
+  };  
 
 export const inscribirEvento = async (req, res) => {
     try {
@@ -264,6 +307,15 @@ export const inscribirEvento = async (req, res) => {
           id_usuario: parsedUsuarioId,
         },
       });
+
+      // Crear notificaciones para todos los participantes
+      await prisma.notificacion.create({
+        data: {
+          id_usuario: evento.id_usuario,
+          contenido: `Alguien se ha inscrito en el evento:"${evento.titulo}"`,            
+          tipo: 'evento',
+        },
+      });
   
       return res.status(201).json({ message: 'Usuario inscrito en el evento con éxito' });
     } catch (error) {
@@ -295,6 +347,16 @@ export const desapuntarseEvento = async (req, res) => {
       if (isNaN(parsedEventoId)) {
         return res.status(400).json({ message: 'ID de evento inválido' });
       }
+
+      // Verifica si el evento existe
+      const evento = await prisma.evento.findUnique({
+        where: { id: parsedEventoId },
+      });
+  
+      if (!evento) {
+        return res.status(404).json({ message: 'Evento no encontrado' });
+      }
+        
   
       // Verifica si existe la relación para eliminar
       const participante = await prisma.participante.findUnique({
@@ -317,6 +379,14 @@ export const desapuntarseEvento = async (req, res) => {
             id_evento: parsedEventoId,
             id_usuario: userId,
           },
+        },
+      });
+
+      await prisma.notificacion.create({
+        data: {
+          id_usuario: evento.id_usuario,
+          contenido: `Alguien se ha desinscrito en el evento:"${evento.titulo}"`,            
+          tipo: 'evento',
         },
       });
   

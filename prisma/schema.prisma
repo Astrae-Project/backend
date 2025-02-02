@@ -172,12 +172,13 @@ model Seguimiento {
 }
 
 model Notificacion {
-  id             Int      @id @default(autoincrement())
+  id             Int              @id @default(autoincrement())
   id_usuario     Int
-  contenido      String   @db.VarChar(255)
-  leido          Boolean  @default(false)
-  fecha_creacion DateTime @default(now())
-  usuario        Usuario  @relation(fields: [id_usuario], references: [id])
+  contenido      String           @db.VarChar(255)
+  tipo           TipoNotificacion @default(evento)
+  leido          Boolean          @default(false)
+  fecha_creacion DateTime         @default(now())
+  usuario        Usuario          @relation(fields: [id_usuario], references: [id])
 }
 
 model Mensaje {
@@ -276,6 +277,13 @@ enum TipoMovimiento {
   evento
   inversion
   oferta
+}
+
+enum TipoNotificacion {
+  evento
+  inversion
+  oferta
+  grupo
 }
 
 enum Tipo {

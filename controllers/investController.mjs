@@ -96,8 +96,6 @@ const getPorcentajeDisponible = async (startupId) => {
   // Calcular el porcentaje disponible
   const porcentajeDisponible = 100 - porcentajeTotalAdquirido;
 
-  console.log(`Porcentaje total adquirido: ${porcentajeTotalAdquirido}, Porcentaje disponible: ${porcentajeDisponible}`);
-
   return porcentajeDisponible;
 };
 
@@ -210,7 +208,6 @@ export const offerAccepted = async (req, res) => {
 
     // Calcular y registrar el valor total del portfolio del inversor
     const valorPortfolio = await calcularValorTotalPortfolio(oferta.id_inversor);
-    console.log('Valor total del portfolio:', valorPortfolio);
 
     await prisma.portfolioHistorico.create({
       data: {

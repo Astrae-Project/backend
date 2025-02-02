@@ -605,6 +605,31 @@ export async function usuarioEspecifico(req, res) {
     }
 }
 
+export async function todosUsuarios (req, res) {
+    try {
+        // Obtener startups aleatorias
+        const usuarios = await prisma.usuario.findMany({
+            orderBy: {
+                id: 'desc',
+            },
+            include: {
+                inversores: true,
+                startups: true,
+                Contacto: true,
+            },
+        });
+
+        if (!usuarios || usuarios.length === 0) {
+            return res.status(404).json({ message: 'No se encontraron usuarios' });
+        }
+
+        res.json({ usuarios });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error al recuperar las usuarios' });
+    }
+};
+
 export async function todasStartups (req, res) {
     try {
         // Obtener startups aleatorias
@@ -1071,7 +1096,6 @@ export async function movimientosSeguidos(req, res) {
         const userId = decodedToken.userId;
 
         if (!userId) {
-            console.log('ID de usuario no encontrado en el token');
             return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
         }
 
@@ -1079,13 +1103,11 @@ export async function movimientosSeguidos(req, res) {
             where: { id_seguidor: userId },
             select: { id_seguido: true },
         });
-        console.log('Usuarios seguidos:', seguidos);
 
         const suscritos = await prisma.suscripcion.findMany({
             where: { id_suscriptor: userId, estado: 'ACTIVA' },
             select: { id_suscrito: true },
         });
-        console.log('Usuarios suscritos:', suscritos);
 
         // Aquí agregamos la lógica para buscar inversores y startups
         const cuentasRelacionadasIds = [];
@@ -1126,10 +1148,8 @@ export async function movimientosSeguidos(req, res) {
         }
 
         const cuentasRelacionadasIdsUnicas = [...new Set(cuentasRelacionadasIds)];
-        console.log('IDs de cuentas relacionadas:', cuentasRelacionadasIdsUnicas);
 
         if (cuentasRelacionadasIdsUnicas.length === 0) {
-            console.log('No hay cuentas relacionadas');
             return res.json({ movimientos: [] });
         }
 
@@ -1172,7 +1192,6 @@ export async function movimientosSeguidos(req, res) {
                 },    
             },
         });
-        console.log('Inversiones recientes:', inversionesRecientes);
 
         // Recuperar ofertas recientes
         const ofertasRecientes = await prisma.oferta.findMany({
@@ -1214,7 +1233,6 @@ export async function movimientosSeguidos(req, res) {
                 },    
             },
         });
-        console.log('Ofertas recientes:', ofertasRecientes);
 
         // Recuperar eventos recientes creados
         const eventosCreadosRecientes = await prisma.evento.findMany({
@@ -1245,7 +1263,6 @@ export async function movimientosSeguidos(req, res) {
                 },
             },
         });
-        console.log('Eventos creados recientes:', eventosCreadosRecientes);
 
         // Recuperar eventos recientes participados
         const eventosParticipadosRecientes = await prisma.evento.findMany({
@@ -1284,7 +1301,6 @@ export async function movimientosSeguidos(req, res) {
                 },
             },
         });
-        console.log('Eventos participados recientes:', eventosParticipadosRecientes);
 
         // Aquí agregamos la lógica para verificar si el 'seguido' es un inversor o una startup
         const movimientos = [
@@ -1328,7 +1344,6 @@ export async function movimientosSeguidos(req, res) {
         const movimientosOrdenados = movimientos.sort((a, b) => {
             return new Date(b.fecha || b.fecha_creacion || b.fecha_evento) - new Date(a.fecha || a.fecha_creacion || a.fecha_evento);
         });
-        console.log('Movimientos ordenados:', movimientosOrdenados);
 
         // Tomar los últimos 10 movimientos
         const ultimosMovimientos = movimientosOrdenados.slice(0, 10);
@@ -1443,8 +1458,6 @@ export async function movimientosSinEventos(req, res) {
         res.status(500).json({ error: 'Error al recuperar movimientos recientes' });
     }
 }
-
-
 
 export async function obtenerContacto(req, res) {
     const token = req.cookies.token;
@@ -1609,3 +1622,31 @@ export async function obtenerHistoricos(req, res) {
     }
   };
     
+// Obtener notificaciones de un usuario
+export async function obtenerNotificaciones(req, res) {
+    const token = req.cookies.token;
+  
+    if (!token) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+  
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const userId = decoded.userId;
+  
+      const notificaciones = await prisma.notificacion.findMany({
+        where: {
+          id_usuario: userId,
+        },
+        orderBy: {
+          fecha_creacion: "desc",
+        },
+      });
+  
+      res.json(notificaciones);
+    } catch (error) {
+      console.error("Error al obtener notificaciones:", error);
+      res.status(500).json({ error: "Error interno del servidor" });
+    }
+  }
+  

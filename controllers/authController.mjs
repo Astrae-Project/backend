@@ -170,8 +170,6 @@ export const tokenController = async (req, res, next) => {
       });
     });
 
-    console.log("Token decodificado:", decoded);
-
     // Extraemos el userId del payload del refresh token
     const { userId } = decoded;
 
@@ -182,12 +180,8 @@ export const tokenController = async (req, res, next) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    console.log("Usuario encontrado:", user);
-
     // Generar un nuevo access token usando los datos del usuario
     const accessToken = generateAccessToken(user);
-
-    console.log("Access token generado:", accessToken);
 
     // Establecer el nuevo access token en la cookie HttpOnly
     res.cookie('token', accessToken, {
