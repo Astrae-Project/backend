@@ -103,6 +103,21 @@ export const joinGroup = async (req, res) => {
       },
     });
 
+    // Obtener a los participantes del evento
+    const participantes = await prisma.grupoUsuario.findMany({
+      where: { id_grupo: parsedGroupId },
+      select: { id_usuario: true },
+    });
+      
+    // Crear notificaciones para los participantes
+    await prisma.notificacion.createMany({
+      data: participantes.map((p) => ({
+        id_usuario: p.id_usuario,
+        contenido: `Un usuario se ha unido al grupo ${grupo.nombre}`,
+        tipo: 'grupo',
+      })),
+    });
+
     res.status(201).json({ message: 'Te has unido al grupo con éxito' });
   } catch (error) {
     console.error('Error al unirse al grupo:', error);
@@ -229,7 +244,7 @@ export const changeData = async (req, res) => {
     }
 
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-    const userId = decodedToken.userId;
+    const userId = parseInt(decodedToken.userId, 10);
 
     if (!userId) {
       return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
@@ -243,33 +258,63 @@ export const changeData = async (req, res) => {
       where: {
         id_grupo_id_usuario: {
           id_grupo: parseInt(grupoId, 10),
-          id_usuario: userId
-        }
-      }
+          id_usuario: userId,
+        },
+      },
     });
 
     if (!grupoUsuario || grupoUsuario.rol !== 'administrador') {
       return res.status(403).json({ message: 'No tienes permisos para realizar esta acción' });
     }
 
-    // Actualizar el grupo
-    const updatedFields = {};
-    if (nombre) updatedFields.nombre = nombre;
-    if (descripcion) updatedFields.descripcion = descripcion;
-    if (tipo) updatedFields.tipo = tipo;
-
-    const grupo = await prisma.grupo.update({
+    // Obtener los datos actuales del grupo
+    const grupoActual = await prisma.grupo.findUnique({
       where: { id: parseInt(grupoId, 10) },
-      data: updatedFields,
     });
 
-    res.status(200).json(grupo);
+    if (!grupoActual) {
+      return res.status(404).json({ message: 'Grupo no encontrado' });
+    }
+
+    // Determinar qué cambios se realizaron
+    const cambios = [];
+    if (nombre && nombre !== grupoActual.nombre) cambios.push(`Nombre: "${grupoActual.nombre}" → "${nombre}"`);
+    if (descripcion && descripcion !== grupoActual.descripcion) cambios.push('Descripción actualizada');
+    if (tipo && tipo !== grupoActual.tipo) cambios.push(`Tipo cambiado a "${tipo}"`);
+
+    // Si no hay cambios reales, no actualizar ni notificar
+    if (cambios.length === 0) {
+      return res.status(200).json({ message: 'No se realizaron cambios en el grupo' });
+    }
+
+    // Actualizar el grupo
+    const grupoActualizado = await prisma.grupo.update({
+      where: { id: parseInt(grupoId, 10) },
+      data: { nombre, descripcion, tipo },
+    });
+
+    // Obtener los miembros del grupo
+    const miembros = await prisma.grupoUsuario.findMany({
+      where: { id_grupo: parseInt(grupoId, 10) },
+      select: { id_usuario: true },
+    });
+
+    // Crear notificaciones para los miembros
+    await prisma.notificacion.createMany({
+      data: miembros.map((m) => ({
+        id_usuario: m.id_usuario,
+        contenido: `El grupo "${grupoActual.nombre}" ha cambiado: ${cambios.join(', ')}`,
+        tipo: 'evento',
+      })),
+    });
+
+    return res.status(200).json({ message: 'Grupo actualizado y notificaciones enviadas', grupo: grupoActualizado });
   } catch (error) {
     console.error('Error al cambiar la información del grupo:', error);
-    res.status(500).json({ message: 'Error al cambiar la información del grupo' });
+    return res.status(500).json({ message: 'Error al cambiar la información del grupo' });
   }
 };
-  
+
 export const addMember = async (req, res) => {
   try {
     const token = req.cookies.token;
@@ -335,6 +380,19 @@ export const addMember = async (req, res) => {
       },
     });
 
+    const participante = await prisma.grupoUsuario.findUnique({
+      where: { id_usuario: newMemberId },
+    });
+      
+    // Crear notificaciones para los participantes
+    await prisma.notificacion.create({
+      data: participante.map((p) => ({
+        id_usuario: p.newMemberId,
+        contenido: `Te has unido al grupo ${grupo.nombre}`,
+        tipo: 'grupo',
+      })),
+    });
+
     res.status(201).json({ message: 'Miembro añadido exitosamente', nuevoMiembro });
   } catch (error) {
     console.error('Error al añadir miembro al grupo:', error);
@@ -343,197 +401,256 @@ export const addMember = async (req, res) => {
 };
 
 
-  export const dropMember = async (req, res) => {
-    const userId = parseInt(req.params.id, 10);
-    const { nombre_startup, usuario, sector, porcentaje, estado_financiacion, plantilla } = req.body;
-  
-    // Validar los campos obligatorios
-    if (!nombre_startup || !usuario || !sector || porcentaje < 0 || porcentaje > 100 || !estado_financiacion || plantilla < 0) {
-      return res.status(400).json({ message: 'Faltan campos requeridos o campos inválidos' });
+export const dropMember = async (req, res) => {
+  try {
+    const token = req.cookies.token;
+
+    if (!token) {
+      return res.status(401).json({ message: 'Token no proporcionado' });
     }
-  
-    // Asegúrate de convertir plantilla y porcentaje a número
-    const plantillaInt = parseInt(plantilla, 10);
-    const porcentajeInt = parseInt(porcentaje, 10);
-  
-    // Validar conversión
-    if (isNaN(plantillaInt) || isNaN(porcentajeInt)) {
-      return res.status(400).json({ message: 'Los campos plantilla y porcentaje deben ser números válidos.' });
+
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = parseInt(decodedToken.userId, 10);
+
+    if (!userId) {
+      return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
     }
-  
-    try {
-      // Verificar si el usuario existe
-      const user = await prisma.usuario.findUnique({
-        where: { id: userId }
-      });
-      if (!user) {
-        return res.status(404).json({ message: 'Usuario no encontrado' });
-      }
-  
-      // Insertar la startup en la base de datos
-      const newStartup = await prisma.startup.create({
-        data: {
-          id_usuario: userId,
-          nombre: nombre_startup,
-          username: usuario,
-          sector: sector,
-          estado_financiacion: estado_financiacion,
-          plantilla: plantillaInt, // Usa el valor convertido aquí
-          porcentaje_disponible: porcentajeInt // Y aquí
-        }
-      });
-  
-      // Respuesta exitosa
-      res.status(200).json({ message: 'Startup creada con éxito', redirectTo: 'http://localhost:3000/' });
-    } catch (err) {
-      console.error('Error al completar el perfil de la startup:', err);
-      res.status(500).json({ message: 'Error al completar el perfil de la startup', error: err.message });
+
+    const { groupId, memberId } = req.body; // Cambié "newMemberId" a "memberId" porque estamos eliminando
+
+    // Verificar que el grupo existe
+    const grupo = await prisma.grupo.findUnique({
+      where: {
+        id: parseInt(groupId, 10),
+      },
+    });
+
+    if (!grupo) {
+      return res.status(404).json({ message: 'Grupo no encontrado' });
     }
-  };
-  
-  export const sendMessage = async (req, res) => {
-    const userId = parseInt(req.params.id, 10);
-    const { nombre_startup, usuario, sector, porcentaje, estado_financiacion, plantilla } = req.body;
-  
-    // Validar los campos obligatorios
-    if (!nombre_startup || !usuario || !sector || porcentaje < 0 || porcentaje > 100 || !estado_financiacion || plantilla < 0) {
-      return res.status(400).json({ message: 'Faltan campos requeridos o campos inválidos' });
+
+    // Verificar que el usuario que hace la solicitud es un administrador
+    const admin = await prisma.grupoUsuario.findFirst({
+      where: {
+        id_usuario: userId,
+        id_grupo: parseInt(groupId, 10),
+        rol: 'administrador',
+      },
+    });
+
+    if (!admin) {
+      return res.status(403).json({ message: 'No tienes permisos para expulsar miembros de este grupo' });
     }
-  
-    // Asegúrate de convertir plantilla y porcentaje a número
-    const plantillaInt = parseInt(plantilla, 10);
-    const porcentajeInt = parseInt(porcentaje, 10);
-  
-    // Validar conversión
-    if (isNaN(plantillaInt) || isNaN(porcentajeInt)) {
-      return res.status(400).json({ message: 'Los campos plantilla y porcentaje deben ser números válidos.' });
+
+    // Verificar si el miembro está en el grupo
+    const existingMember = await prisma.grupoUsuario.findFirst({
+      where: {
+        id_usuario: parseInt(memberId, 10),
+        id_grupo: parseInt(groupId, 10),
+      },
+    });
+
+    if (!existingMember) {
+      return res.status(400).json({ message: 'El usuario no es miembro del grupo' });
     }
+
+    // Expulsar al miembro del grupo
+    await prisma.grupoUsuario.delete({
+      where: {
+        id_grupo_id_usuario: {
+          id_grupo: parseInt(groupId, 10),
+          id_usuario: parseInt(memberId, 10),
+        },
+      },
+    });
+
+    // Crear notificación para el miembro expulsado
+    await prisma.notificacion.create({
+      data: {
+        id_usuario: parseInt(memberId, 10),
+        contenido: `Has sido expulsado del grupo "${grupo.nombre}".`,
+        tipo: 'grupo',
+      },
+    });
+
+    return res.status(200).json({ message: 'Miembro expulsado exitosamente' });
+  } catch (error) {
+    console.error('Error al expulsar miembro del grupo:', error);
+    return res.status(500).json({ message: 'Error al expulsar miembro del grupo' });
+  }
+};
   
-    try {
-      // Verificar si el usuario existe
-      const user = await prisma.usuario.findUnique({
-        where: { id: userId }
-      });
-      if (!user) {
-        return res.status(404).json({ message: 'Usuario no encontrado' });
-      }
-  
-      // Insertar la startup en la base de datos
-      const newStartup = await prisma.startup.create({
-        data: {
-          id_usuario: userId,
-          nombre: nombre_startup,
-          username: usuario,
-          sector: sector,
-          estado_financiacion: estado_financiacion,
-          plantilla: plantillaInt, // Usa el valor convertido aquí
-          porcentaje_disponible: porcentajeInt // Y aquí
-        }
-      });
-  
-      // Respuesta exitosa
-      res.status(200).json({ message: 'Startup creada con éxito', redirectTo: 'http://localhost:3000/' });
-    } catch (err) {
-      console.error('Error al completar el perfil de la startup:', err);
-      res.status(500).json({ message: 'Error al completar el perfil de la startup', error: err.message });
+export const sendMessage = async (req, res) => {
+  try {
+    const token = req.cookies.token;
+
+    if (!token) {
+      return res.status(401).json({ message: 'Token no proporcionado' });
     }
-  };
-  
-  export const seeMessage = async (req, res) => {
-    const userId = parseInt(req.params.id, 10);
-    const { nombre_startup, usuario, sector, porcentaje, estado_financiacion, plantilla } = req.body;
-  
-    // Validar los campos obligatorios
-    if (!nombre_startup || !usuario || !sector || porcentaje < 0 || porcentaje > 100 || !estado_financiacion || plantilla < 0) {
-      return res.status(400).json({ message: 'Faltan campos requeridos o campos inválidos' });
+
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = parseInt(decodedToken.userId, 10);
+
+    if (!userId) {
+      return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
     }
-  
-    // Asegúrate de convertir plantilla y porcentaje a número
-    const plantillaInt = parseInt(plantilla, 10);
-    const porcentajeInt = parseInt(porcentaje, 10);
-  
-    // Validar conversión
-    if (isNaN(plantillaInt) || isNaN(porcentajeInt)) {
-      return res.status(400).json({ message: 'Los campos plantilla y porcentaje deben ser números válidos.' });
+
+    const { groupId } = req.params; // Se espera que groupId venga en la URL, por ejemplo: /api/grupos/:groupId/mensajes
+    const { contenido } = req.body;
+
+    if (!contenido || contenido.trim() === '') {
+      return res.status(400).json({ message: 'El mensaje no puede estar vacío' });
     }
-  
-    try {
-      // Verificar si el usuario existe
-      const user = await prisma.usuario.findUnique({
-        where: { id: userId }
-      });
-      if (!user) {
-        return res.status(404).json({ message: 'Usuario no encontrado' });
-      }
-  
-      // Insertar la startup en la base de datos
-      const newStartup = await prisma.startup.create({
-        data: {
-          id_usuario: userId,
-          nombre: nombre_startup,
-          username: usuario,
-          sector: sector,
-          estado_financiacion: estado_financiacion,
-          plantilla: plantillaInt, // Usa el valor convertido aquí
-          porcentaje_disponible: porcentajeInt // Y aquí
-        }
-      });
-  
-      // Respuesta exitosa
-      res.status(200).json({ message: 'Startup creada con éxito', redirectTo: 'http://localhost:3000/' });
-    } catch (err) {
-      console.error('Error al completar el perfil de la startup:', err);
-      res.status(500).json({ message: 'Error al completar el perfil de la startup', error: err.message });
+
+    // Verificar que el usuario es miembro del grupo
+    const miembro = await prisma.grupoUsuario.findFirst({
+      where: {
+        id_usuario: userId,
+        id_grupo: parseInt(groupId, 10),
+      },
+    });
+
+    if (!miembro) {
+      return res.status(403).json({ message: 'No eres miembro de este grupo' });
     }
-  };
+
+    // Guardar el mensaje en la base de datos
+    const mensaje = await prisma.mensaje.create({
+      data: {
+        id_grupo: parseInt(groupId, 10),
+        id_usuario: userId,
+        contenido: contenido.trim(),
+      },
+    });
+
+    res.status(201).json({ message: 'Mensaje enviado con éxito', mensaje });
+  } catch (error) {
+    console.error('Error al enviar mensaje:', error);
+    res.status(500).json({ message: 'Error al enviar mensaje', error: error.message });
+  }
+};
+
+// Endpoint para obtener los mensajes de un grupo
+export const seeMessage = async (req, res) => {
+  try {
+    const { groupId } = req.params; // Se espera que groupId venga en la URL, por ejemplo: /api/grupos/:groupId/mensajes
+
+    // Verificar que el grupo existe
+    const grupo = await prisma.grupo.findUnique({
+      where: { id: parseInt(groupId, 10) },
+    });
+
+    if (!grupo) {
+      return res.status(404).json({ message: 'Grupo no encontrado' });
+    }
+
+    // Recuperar los mensajes del grupo, ordenados de más antiguo a más reciente,
+    // e incluir los datos básicos del usuario que envió cada mensaje
+    const mensajes = await prisma.mensaje.findMany({
+      where: { id_grupo: parseInt(groupId, 10) },
+      orderBy: { fecha_envio: 'asc' },
+      include: {
+        usuario: {
+          select: { id: true, username: true },
+        },
+      },
+    });
+
+    res.status(200).json({ mensajes });
+  } catch (error) {
+    console.error('Error al obtener mensajes:', error);
+    res.status(500).json({ message: 'Error al obtener mensajes', error: error.message });
+  }
+};
 
   export const changeRole = async (req, res) => {
-    const userId = parseInt(req.params.id, 10);
-    const { nombre_startup, usuario, sector, porcentaje, estado_financiacion, plantilla } = req.body;
-  
-    // Validar los campos obligatorios
-    if (!nombre_startup || !usuario || !sector || porcentaje < 0 || porcentaje > 100 || !estado_financiacion || plantilla < 0) {
-      return res.status(400).json({ message: 'Faltan campos requeridos o campos inválidos' });
-    }
-  
-    // Asegúrate de convertir plantilla y porcentaje a número
-    const plantillaInt = parseInt(plantilla, 10);
-    const porcentajeInt = parseInt(porcentaje, 10);
-  
-    // Validar conversión
-    if (isNaN(plantillaInt) || isNaN(porcentajeInt)) {
-      return res.status(400).json({ message: 'Los campos plantilla y porcentaje deben ser números válidos.' });
-    }
-  
     try {
-      // Verificar si el usuario existe
-      const user = await prisma.usuario.findUnique({
-        where: { id: userId }
-      });
-      if (!user) {
-        return res.status(404).json({ message: 'Usuario no encontrado' });
+      const token = req.cookies.token;
+  
+      if (!token) {
+        return res.status(401).json({ message: 'Token no proporcionado' });
       }
   
-      // Insertar la startup en la base de datos
-      const newStartup = await prisma.startup.create({
-        data: {
-          id_usuario: userId,
-          nombre: nombre_startup,
-          username: usuario,
-          sector: sector,
-          estado_financiacion: estado_financiacion,
-          plantilla: plantillaInt, // Usa el valor convertido aquí
-          porcentaje_disponible: porcentajeInt // Y aquí
-        }
+      const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+      const userId = parseInt(decodedToken.userId, 10);
+  
+      if (!userId) {
+        return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
+      }
+  
+      const { groupId, memberId, newRole } = req.body;
+  
+      // Verificar si el grupo existe
+      const grupo = await prisma.grupo.findUnique({
+        where: { id: parseInt(groupId, 10) },
       });
   
-      // Respuesta exitosa
-      res.status(200).json({ message: 'Startup creada con éxito', redirectTo: 'http://localhost:3000/' });
-    } catch (err) {
-      console.error('Error al completar el perfil de la startup:', err);
-      res.status(500).json({ message: 'Error al completar el perfil de la startup', error: err.message });
+      if (!grupo) {
+        return res.status(404).json({ message: 'Grupo no encontrado' });
+      }
+  
+      // Verificar que el usuario que hace la solicitud es un administrador
+      const admin = await prisma.grupoUsuario.findFirst({
+        where: {
+          id_usuario: userId,
+          id_grupo: parseInt(groupId, 10),
+          rol: 'administrador',
+        },
+      });
+  
+      if (!admin) {
+        return res.status(403).json({ message: 'No tienes permisos para cambiar roles en este grupo' });
+      }
+  
+      // Verificar que el miembro al que se quiere cambiar el rol existe en el grupo
+      const miembro = await prisma.grupoUsuario.findFirst({
+        where: {
+          id_usuario: parseInt(memberId, 10),
+          id_grupo: parseInt(groupId, 10),
+        },
+      });
+  
+      if (!miembro) {
+        return res.status(404).json({ message: 'El usuario no es miembro del grupo' });
+      }
+  
+      // Validar el nuevo rol
+      const rolesPermitidos = ['miembro', 'administrador'];
+      if (!rolesPermitidos.includes(newRole)) {
+        return res.status(400).json({ message: 'Rol no válido. Los roles permitidos son "miembro" y "administrador".' });
+      }
+  
+      // Evitar que un administrador se degrade a sí mismo
+      if (userId === parseInt(memberId, 10) && newRole !== 'administrador') {
+        return res.status(400).json({ message: 'No puedes cambiar tu propio rol.' });
+      }
+  
+      // Actualizar el rol del miembro
+      await prisma.grupoUsuario.update({
+        where: {
+          id_grupo_id_usuario: {
+            id_grupo: parseInt(groupId, 10),
+            id_usuario: parseInt(memberId, 10),
+          },
+        },
+        data: {
+          rol: newRole,
+        },
+      });
+  
+      // Crear notificación para el usuario afectado
+      await prisma.notificacion.create({
+        data: {
+          id_usuario: parseInt(memberId, 10),
+          contenido: `Tu rol en el grupo "${grupo.nombre}" ha sido cambiado a "${newRole}".`,
+          tipo: 'grupo',
+        },
+      });
+  
+      return res.status(200).json({ message: `Rol cambiado exitosamente a "${newRole}".` });
+    } catch (error) {
+      console.error('Error al cambiar el rol del usuario:', error);
+      return res.status(500).json({ message: 'Error al cambiar el rol del usuario' });
     }
   };
-
-  
   
