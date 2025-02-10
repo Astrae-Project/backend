@@ -283,7 +283,10 @@ enum TipoNotificacion {
   evento
   inversion
   oferta
+  contraoferta
   grupo
+  reseña
+  seguimiento
 }
 
 enum Tipo {

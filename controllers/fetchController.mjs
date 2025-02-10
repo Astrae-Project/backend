@@ -1623,7 +1623,7 @@ export async function obtenerHistoricos(req, res) {
   };
     
 // Obtener notificaciones de un usuario
-export async function obtenerNotificaciones(req, res) {
+  export async function obtenerNotificaciones(req, res) {
     const token = req.cookies.token;
   
     if (!token) {
@@ -1636,17 +1636,18 @@ export async function obtenerNotificaciones(req, res) {
   
       const notificaciones = await prisma.notificacion.findMany({
         where: {
-          id_usuario: userId,
-        },
-        orderBy: {
-          fecha_creacion: "desc",
-        },
-      });
+            id_usuario: userId,
+          },
+          orderBy: {
+            fecha_creacion: "desc",
+          },
+          take: 4,
+        });    
   
       res.json(notificaciones);
     } catch (error) {
       console.error("Error al obtener notificaciones:", error);
       res.status(500).json({ error: "Error interno del servidor" });
     }
-  }
+  }  
   

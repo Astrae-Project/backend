@@ -44,6 +44,20 @@ export const follow = async (req, res) => {
       data: { id_seguidor, id_seguido },
     });
 
+    // Obtener el usuario seguidor para usar su username en la notificación
+    const seguidor = await prisma.usuario.findUnique({
+      where: { id: id_seguidor },
+    });
+
+    // Crear la notificación para el usuario seguido
+    await prisma.notificacion.create({
+      data: {
+        id_usuario: id_seguido,
+        tipo: 'seguimiento',
+        contenido: `@${seguidor.username} te ha seguido.`,
+      },
+    });
+
     return res.status(201).json({
       message: 'Has comenzado a seguir al usuario.',
       seguimiento: newFollow,
@@ -111,7 +125,7 @@ export const unfollow = async (req, res) => {
 };
 
 export const suscribe = async (req, res) => {
-  const { id_servicio } = req.body;  // El servicio que el usuario quiere suscribirse
+  const { id_servicio } = req.body;  // El servicio al que el usuario quiere suscribirse
   const token = req.cookies.token;
 
   if (!token) {
@@ -136,7 +150,7 @@ export const suscribe = async (req, res) => {
     }
 
     // Llamar a un proceso de pago (por ejemplo, Stripe)
-    const paymentSuccess = await processPayment(servicio.precio, id_usuario);
+    const paymentSuccess = await processPayment(servicio.precio, userId);
     
     if (!paymentSuccess) {
       return res.status(400).json({ message: 'Pago fallido. Intenta nuevamente.' });
@@ -146,19 +160,33 @@ export const suscribe = async (req, res) => {
     const fecha_expiracion = new Date();
     fecha_expiracion.setMonth(fecha_expiracion.getMonth() + 1); // La suscripción es válida por un mes
 
-    // Obtener el método de pago usado (esto puede variar dependiendo de cómo estés gestionando los pagos)
-    const metodoPago = 'TARJETA'; // O 'PAYPAL' dependiendo del pago realizado, lo deberías extraer de tu proceso de pago
+    // Obtener el método de pago usado (esto dependerá de tu proceso de pago)
+    const metodoPago = 'TARJETA'; // O 'PAYPAL', etc.
 
     // Crear la suscripción
     const nuevaSuscripcion = await prisma.suscripcion.create({
       data: {
-        id_suscriptor: userId, // El usuario que se suscribe
-        id_suscrito: servicio.id_usuario, // El usuario dueño del servicio (supuesto)
+        id_suscriptor: userId,            // El usuario que se suscribe
+        id_suscrito: servicio.id_usuario,   // El usuario dueño del servicio
         fecha_inicio: new Date(),
         fecha_expiracion,
-        estado: 'ACTIVA', // Estado de la suscripción
-        auto_renovacion: false, // Aquí podrías poner lógica de renovación automática
-        metodo_pago: metodoPago, // Método de pago
+        estado: 'ACTIVA',                   // Estado de la suscripción
+        auto_renovacion: false,             // Puedes implementar lógica de renovación automática
+        metodo_pago: metodoPago,
+      },
+    });
+
+    // Obtener el usuario suscriptor para usar su username en la notificación
+    const suscriptor = await prisma.usuario.findUnique({
+      where: { id: userId },
+    });
+
+    // Crear la notificación para el usuario dueño del servicio
+    await prisma.notificacion.create({
+      data: {
+        id_usuario: servicio.id_usuario, // Notificar al dueño del servicio
+        tipo: 'suscripcion',             // Tipo de notificación (ajústalo según tu modelo)
+        contenido: `@${suscriptor.username} se ha suscrito a tu servicio.`,
       },
     });
 
@@ -171,7 +199,6 @@ export const suscribe = async (req, res) => {
     return res.status(500).json({ error: 'Error interno del servidor.' });
   }
 };
-
 
 export const unsuscribe = async (req, res) => {
   try {

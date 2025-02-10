@@ -124,6 +124,15 @@ export async function darPuntuacion(req, res) {
             },
         });
 
+        await prisma.notificacion.create({
+            data: {
+                id_usuario: id_inversor,
+                tipo: 'reseña',
+                descripcion: `Has recibido una reseña de la startup ${startup[0].nombre}`,
+                leido: false,
+            },
+        });
+
         return res.status(201).json(nuevaResena);
     } catch (error) {
         console.error("Error al crear la reseña:", error);

@@ -73,10 +73,25 @@ export const offer = async (req, res) => {
       },
     });
 
-    const notificacion = await prisma.notificacion.create({
+    const formatMonto = (monto) => {
+      if (monto >= 1e6) {
+        const millones = monto / 1e6;
+        // Si es entero, sin decimales; si no, con 1 decimal.
+        return `${millones % 1 === 0 ? millones.toFixed(0) : millones.toFixed(1)}M`;
+      } else if (monto >= 1e3) {
+        const miles = monto / 1e3;
+        return `${miles % 1 === 0 ? miles.toFixed(0) : miles.toFixed(1)}K`;
+      } else {
+        return monto.toString();
+      }
+    };
+
+    const montoFormateado = formatMonto(monto_ofrecido) + "€";
+
+    await prisma.notificacion.create({
       data: {
         id_usuario: startup.id_usuario,
-        contenido: `Has recibido una nueva oferta de ${inversor.nombre} de ${monto_ofrecido}€ por el ${porcentaje_ofrecido}%`,
+        contenido: `Has recibido una oferta de ${inversor.nombre} de ${montoFormateado} por el ${porcentaje_ofrecido}%`,
         tipo: 'oferta',
       },
     });
@@ -234,11 +249,26 @@ export const offerAccepted = async (req, res) => {
       return res.status(404).json({ message: 'Usuario inversor no encontrado' });
     }
 
+    const formatMonto = (monto) => {
+      if (monto >= 1e6) {
+        const millones = monto / 1e6;
+        // Si es entero, sin decimales; si no, con 1 decimal.
+        return `${millones % 1 === 0 ? millones.toFixed(0) : millones.toFixed(1)}M`;
+      } else if (monto >= 1e3) {
+        const miles = monto / 1e3;
+        return `${miles % 1 === 0 ? miles.toFixed(0) : miles.toFixed(1)}K`;
+      } else {
+        return monto.toString();
+      }
+    };
+
+    const montoFormateado = formatMonto(oferta.monto_ofrecido) + "€";
+
     // Crear la notificación para el inversor
     await prisma.notificacion.create({
       data: {
         id_usuario: inversor.id_usuario,
-        contenido: `Tu oferta de ${oferta.monto_ofrecido}€ por el ${oferta.porcentaje_ofrecido}% ha sido aceptada.`,
+        contenido: `Tu oferta de ${montoFormateado} por el ${oferta.porcentaje_ofrecido}% ha sido aceptada.`,
         tipo: 'inversion',
       },
     });
@@ -297,11 +327,26 @@ export const offerRejected = async (req, res) => {
       return res.status(404).json({ message: 'Usuario inversor no encontrado' });
     }
 
+    const formatMonto = (monto) => {
+      if (monto >= 1e6) {
+        const millones = monto / 1e6;
+        // Si es entero, sin decimales; si no, con 1 decimal.
+        return `${millones % 1 === 0 ? millones.toFixed(0) : millones.toFixed(1)}M`;
+      } else if (monto >= 1e3) {
+        const miles = monto / 1e3;
+        return `${miles % 1 === 0 ? miles.toFixed(0) : miles.toFixed(1)}K`;
+      } else {
+        return monto.toString();
+      }
+    };
+
+    const montoFormateado = formatMonto(oferta.monto_ofrecido) + "€";
+
     // Crear la notificación para el inversor
     await prisma.notificacion.create({
       data: {
         id_usuario: inversor.id_usuario,
-        contenido: `Tu oferta de ${oferta.monto_ofrecido}€ por el ${oferta.porcentaje_ofrecido}% ha sido rechazada.`,
+        contenido: `Tu oferta de ${montoFormateado} por el ${oferta.porcentaje_ofrecido}% ha sido rechazada.`,
         tipo: 'inversion',
       },
     });
@@ -369,11 +414,26 @@ export const counteroffer = async (req, res) => {
         data: { estado: 'rechazado' }
       });
 
+      const formatMonto = (monto) => {
+        if (monto >= 1e6) {
+          const millones = monto / 1e6;
+          // Si es entero, sin decimales; si no, con 1 decimal.
+          return `${millones % 1 === 0 ? millones.toFixed(0) : millones.toFixed(1)}M`;
+        } else if (monto >= 1e3) {
+          const miles = monto / 1e3;
+          return `${miles % 1 === 0 ? miles.toFixed(0) : miles.toFixed(1)}K`;
+        } else {
+          return monto.toString();
+        }
+      };
+
+      const montoFormateado = formatMonto(monto_ofrecido) + "€";
+
       // Crear notificación DENTRO de la transacción
       await prisma.notificacion.create({
         data: {
           id_usuario: oferta.inversor.id_usuario,  // Ahora accesible por el include
-          contenido: `Nueva contraoferta de ${oferta.startup.nombre}: ${monto_ofrecido}€ (${porcentaje_ofrecido}%)`,
+          contenido: `Nueva contraoferta de ${oferta.startup.nombre}: ${montoFormateado} (${porcentaje_ofrecido}%)`,
           tipo: 'contraoferta'
         }
       });
@@ -499,11 +559,26 @@ export const acceptCounteroffer = async (req, res) => {
       },
     });
 
+    const formatMonto = (monto) => {
+      if (monto >= 1e6) {
+        const millones = monto / 1e6;
+        // Si es entero, sin decimales; si no, con 1 decimal.
+        return `${millones % 1 === 0 ? millones.toFixed(0) : millones.toFixed(1)}M`;
+      } else if (monto >= 1e3) {
+        const miles = monto / 1e3;
+        return `${miles % 1 === 0 ? miles.toFixed(0) : miles.toFixed(1)}K`;
+      } else {
+        return monto.toString();
+      }
+    };
+
+    const montoFormateado = formatMonto(oferta.contraoferta_monto) + "€";
+
     // Crear la notificación para el inversor (usamos el id del inversor obtenido de la oferta)
     await prisma.notificacion.create({
       data: {
         id_usuario: oferta.inversor.id_usuario,
-        contenido: `Tu contraoferta de ${oferta.contraoferta_monto}€ por el ${porcentajeContraofrecido}% ha sido aceptada.`,
+        contenido: `Tu contraoferta de ${montoFormateado} por el ${porcentajeContraofrecido}% ha sido aceptada.`,
         tipo: 'inversion',
       },
     });
@@ -550,11 +625,26 @@ export const rejectCounteroffer = async (req, res) => {
       data: { estado: 'rechazada' },
     });
 
+    const formatMonto = (monto) => {
+      if (monto >= 1e6) {
+        const millones = monto / 1e6;
+        // Si es entero, sin decimales; si no, con 1 decimal.
+        return `${millones % 1 === 0 ? millones.toFixed(0) : millones.toFixed(1)}M`;
+      } else if (monto >= 1e3) {
+        const miles = monto / 1e3;
+        return `${miles % 1 === 0 ? miles.toFixed(0) : miles.toFixed(1)}K`;
+      } else {
+        return monto.toString();
+      }
+    };
+
+    const montoFormateado = formatMonto(oferta.contraoferta_monto) + "€";
+
     // Crear la notificación para el inversor
     await prisma.notificacion.create({
       data: {
         id_usuario: oferta.inversor.id_usuario,
-        contenido: `Tu contraoferta de ${oferta.contraoferta_monto}€ por el ${oferta.contraoferta_porcentaje}% ha sido rechazada.`,
+        contenido: `Tu contraoferta de ${montoFormateado} por el ${oferta.contraoferta_porcentaje}% ha sido rechazada.`,
         tipo: 'inversion',
       },
     });
