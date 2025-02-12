@@ -2,20 +2,19 @@ import prisma from '../lib/prismaClient.mjs';
 import jwt from 'jsonwebtoken';
 import { actualizarValoresInversiones, calcularValoracion, calcularValorTotalPortfolio } from '../lib/functionCalculations.mjs';
 
-// Función para crear una oferta
 export const offer = async (req, res) => {
   const token = req.cookies.token;
   const { id_startup, monto_ofrecido, porcentaje_ofrecido } = req.body;
 
   if (!token) {
-      return res.status(402).json({ message: 'Token no proporcionado' });
+    return res.status(402).json({ message: 'Token no proporcionado' });
   }
 
   const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
   const userId = decodedToken.userId;
 
   if (!userId) {
-      return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
+    return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
   }
 
   if (!id_startup || !monto_ofrecido || !porcentaje_ofrecido) {
@@ -28,6 +27,7 @@ export const offer = async (req, res) => {
   }
 
   try {
+    // Buscar el inversor asociado al usuario autenticado
     const inversor = await prisma.inversor.findFirst({
       where: { id_usuario: userId },
     });
@@ -36,6 +36,7 @@ export const offer = async (req, res) => {
       return res.status(404).json({ message: 'Inversor no encontrado' });
     }
 
+    // Buscar la startup a la que se le enviará la oferta
     const startup = await prisma.startup.findUnique({
       where: { id: id_startup },
     });
@@ -52,11 +53,11 @@ export const offer = async (req, res) => {
         monto_ofrecido,
         porcentaje_ofrecido,
         estado: 'pendiente',
-        escrow_id: null, // Inicialmente lo dejamos en null
+        escrow_id: null, // Inicialmente se deja en null
       },
     });
 
-    // Crear el registro de escrow
+    // Crear el registro de escrow relacionado a la oferta
     const escrow = await prisma.escrow.create({
       data: {
         id_oferta: oferta.id,
@@ -65,7 +66,7 @@ export const offer = async (req, res) => {
       },
     });
 
-    // Actualizar la oferta para incluir el escrow_id
+    // Actualizar la oferta para asignarle el escrow_id
     const updatedOferta = await prisma.oferta.update({
       where: { id: oferta.id },
       data: {
@@ -73,10 +74,10 @@ export const offer = async (req, res) => {
       },
     });
 
+    // Función para formatear el monto (en K o M)
     const formatMonto = (monto) => {
       if (monto >= 1e6) {
         const millones = monto / 1e6;
-        // Si es entero, sin decimales; si no, con 1 decimal.
         return `${millones % 1 === 0 ? millones.toFixed(0) : millones.toFixed(1)}M`;
       } else if (monto >= 1e3) {
         const miles = monto / 1e3;
@@ -88,9 +89,10 @@ export const offer = async (req, res) => {
 
     const montoFormateado = formatMonto(monto_ofrecido) + "€";
 
+    // Crear la notificación e incluir el ID de la oferta en el mensaje para que el frontend pueda interactuar con ella
     await prisma.notificacion.create({
       data: {
-        id_usuario: startup.id_usuario,
+        id_usuario: startup.id_usuario, // Notifica al dueño de la startup
         contenido: `Has recibido una oferta de ${inversor.nombre} de ${montoFormateado} por el ${porcentaje_ofrecido}%`,
         tipo: 'oferta',
       },
