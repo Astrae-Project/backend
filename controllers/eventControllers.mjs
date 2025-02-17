@@ -312,7 +312,7 @@ export const inscribirEvento = async (req, res) => {
       await prisma.notificacion.create({
         data: {
           id_usuario: evento.id_usuario,
-          contenido: `Alguien se ha inscrito en el evento:"${evento.titulo}"`,            
+          contenido: `Alguien se ha inscrito en el evento: "${evento.titulo}"`,            
           tipo: 'evento',
         },
       });
@@ -385,7 +385,7 @@ export const desapuntarseEvento = async (req, res) => {
       await prisma.notificacion.create({
         data: {
           id_usuario: evento.id_usuario,
-          contenido: `Alguien se ha desinscrito en el evento:"${evento.titulo}"`,            
+          contenido: `Alguien se ha desinscrito en el evento: "${evento.titulo}"`,            
           tipo: 'evento',
         },
       });

@@ -1490,6 +1490,50 @@ export async function obtenerContacto(req, res) {
     }
 }
 
+export async function obtenerOferta(req, res) {
+    try {
+        const token = req.cookies?.token;
+
+        if (!token) {
+            return res.status(401).json({ message: "No autorizado. Token no proporcionado." });
+        }
+
+        const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+        const userId = decodedToken?.userId;
+
+        if (!userId || typeof userId !== "number") {
+            return res.status(400).json({ message: "ID de usuario no válido." });
+        }
+
+        // Obtener solo las ofertas pendientes del usuario (startups que le pertenecen)
+        const ofertas = await prisma.oferta.findMany({
+            where: {
+                startup: {
+                    id_usuario: userId,  // Verifica que `id_usuario` exista en el modelo Startup
+                },
+                estado: "pendiente",
+            },
+            include: {
+                inversor: {
+                    include: {
+                        usuario: true, // Se incluye la relación con usuario dentro de inversor
+                    },
+                },
+            },
+        });
+
+        if (!ofertas || ofertas.length === 0) {
+            return res.status(404).json({ message: "No hay ofertas pendientes." });
+        }
+
+        return res.json(ofertas);
+    } catch (error) {
+        console.error("Error al obtener ofertas:", error.message);
+        return res.status(500).json({ error: "Error interno del servidor." });
+    }
+}
+
+
 export async function obtenerEventos(req, res) {
     const token = req.cookies.token;
   
@@ -1637,6 +1681,7 @@ export async function obtenerHistoricos(req, res) {
       const notificaciones = await prisma.notificacion.findMany({
         where: {
             id_usuario: userId,
+            leido: false,
           },
           orderBy: {
             fecha_creacion: "desc",
