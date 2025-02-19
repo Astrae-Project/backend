@@ -1355,7 +1355,6 @@ export async function movimientosSeguidos(req, res) {
     }
 }
 
-
 export async function movimientosSinEventos(req, res) {
     const token = req.cookies.token;
 
@@ -1459,6 +1458,79 @@ export async function movimientosSinEventos(req, res) {
     }
 }
 
+export async function movimientosInversionStartups(req, res) {
+    const token = req.cookies.token;
+
+    if (!token) {
+        return res.status(402).json({ message: 'Token no proporcionado' });
+    }
+
+    try {
+        const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+        const userId = decodedToken.userId;
+
+        if (!userId) {
+            return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
+        }
+
+        // Buscar el inversor asociado al usuario
+        const startup = await prisma.startup.findFirst({
+            where: { id_usuario: userId },
+        });
+
+        if (!startup) {
+            return res.status(404).json({ message: 'Startup no encontrado' });
+        }
+
+        // Recuperar inversiones recientes con el usuario de la startup
+        const inversionesRecientes = await prisma.inversion.findMany({
+            where: { id_startup: startup.id },
+            orderBy: { fecha: 'desc' },
+            take: 10,
+            select: {
+                id: true,
+                monto_invertido: true,
+                porcentaje_adquirido: true,
+                fecha: true,
+                inversor: {
+                    include: {
+                        usuario: {
+                            select: {
+                                username: true,
+                                avatar: true,
+                                seguidores: true,
+                            },
+                        },
+                     },
+                },
+            },
+        });
+
+        // Combinar todos los movimientos en un solo array
+        const movimientos = [
+            ...inversionesRecientes.map(m => ({
+                ...m,
+                tipo_movimiento: 'inversion',
+                avatar: m.inversor.usuario.avatar,
+            })),
+        ];
+
+        // Ordenar los movimientos por fecha (más reciente primero)
+        const movimientosOrdenados = movimientos.sort((a, b) => {
+            return new Date(b.fecha || b.fecha_creacion || b.fecha_evento) - new Date(a.fecha || a.fecha_creacion || a.fecha_evento);
+        });
+
+        // Tomar los últimos 10 movimientos
+        const ultimosMovimientos = movimientosOrdenados.slice(0, 10);
+
+        // Enviar respuesta
+        res.json(ultimosMovimientos);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al recuperar movimientos recientes' });
+    }
+}
+
 export async function obtenerContacto(req, res) {
     const token = req.cookies.token;
 
@@ -1519,6 +1591,12 @@ export async function obtenerOferta(req, res) {
                         usuario: true, // Se incluye la relación con usuario dentro de inversor
                     },
                 },
+                startup: {
+                    include: {
+                        usuario: true, // Se incluye la relación con usuario dentro de startup
+                    },
+                },
+                escrow: true,
             },
         });
 

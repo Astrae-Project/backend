@@ -16,17 +16,15 @@ export const registerUser = async (req, res) => {
   }
 
   try {
-    const existingUser = await prisma.usuario.findUnique({
-      where: { email },
-    });
-
+    // Verificar si el usuario ya existe
+    const existingUser = await prisma.usuario.findUnique({ where: { email } });
     if (existingUser) {
       console.warn('El usuario ya existe:', email);
       return res.status(400).json({ message: 'El usuario ya existe' });
     }
 
+    // Hashear contraseña y crear usuario
     const hashedPassword = await bcrypt.hash(password, 10);
-
     const newUser = await prisma.usuario.create({
       data: {
         email,
@@ -37,42 +35,44 @@ export const registerUser = async (req, res) => {
 
     const userId = newUser.id;
 
-    const newContact = await prisma.contacto.create({
+    // Crear contacto asociado
+    await prisma.contacto.create({
       data: {
         id_usuario: userId,
         correo: email,
       },
     });
 
-    // Crear tokens
+    // Crear tokens iniciales (sin rol)
     const accessToken = jwt.sign(
-      { userId: user.id, role: user.rol },
+      { userId },
       process.env.JWT_SECRET,
-      { expiresIn: '5s' }
+      { expiresIn: '1h' }
     );
     const refreshToken = jwt.sign(
-      { userId: user.id, role: user.rol },
+      { userId },
       process.env.JWT_REFRESH_SECRET,
       { expiresIn: '7d' }
     );
 
+    // Configurar cookies
     res.cookie('token', accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // Solo si estás usando HTTPS
+      secure: process.env.NODE_ENV === 'production',
       maxAge: 60 * 60 * 1000, // 1 hora
-      sameSite: 'Strict', // Protege contra ataques CSRF
-      path: '/', // Establece el path adecuado para las cookies
+      sameSite: 'Strict',
+      path: '/',
     });
 
     res.cookie('refreshToken', refreshToken, {
-      httpOnly: true, // No accesible desde JavaScript
-      secure: process.env.NODE_ENV === 'production', // Solo si estás usando HTTPS
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
-      sameSite: 'Strict', // Protege contra ataques CSRF
-      path: '/', // Establece el path adecuado para las cookies
+      sameSite: 'Strict',
+      path: '/',
     });
 
-    res.status(201).json({ message: 'Usuario registrado con éxito', session });
+    res.status(201).json({ message: 'Usuario registrado con éxito' });
   } catch (err) {
     console.error('Error en el registro:', err);
     res.status(500).json({ message: 'Error al registrar el usuario' });

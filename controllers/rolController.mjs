@@ -1,34 +1,67 @@
 import prisma from '../lib/prismaClient.mjs'; // Asegúrate de que la importación de Prisma está correcta
 import jwt from 'jsonwebtoken';
 
+// Selección de rol (actualiza el usuario y reemite los tokens con el rol)
 export const selectRole = async (req, res) => {
+  const token = req.cookies.token;
+  if (!token) {
+    return res.status(401).json({ message: 'Token no proporcionado' });
+  }
+
+  let decodedToken;
   try {
-    const token  = req.cookies.token; // Obtenemos solo el token, no es necesario refreshToken en esta función
+    decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (err) {
+    return res.status(401).json({ message: 'Token inválido', error: err.message });
+  }
 
-    if (!token) {
-      return res.status(401).json({ message: 'Token no proporcionado' });
-    }
+  const userId = decodedToken.userId;
+  if (!userId) {
+    return res.status(401).json({ message: 'ID de usuario no encontrado en el token' });
+  }
 
-    try {
-      const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-      const userId = decodedToken.userId;
+  const { rol } = req.body;
+  if (!rol) {
+    return res.status(400).json({ message: 'Falta el campo rol en la solicitud' });
+  }
 
-      if (!userId) {
-        return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
-      }
+  try {
+    // Actualizar el rol del usuario en la base de datos
+    await prisma.usuario.update({
+      where: { id: userId },
+      data: { rol },
+    });
 
-      const { rol } = req.body;
+    // Crear nuevos tokens incluyendo el rol actualizado
+    const accessToken = jwt.sign(
+      { userId, rol },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+    const refreshToken = jwt.sign(
+      { userId, rol },
+      process.env.JWT_REFRESH_SECRET,
+      { expiresIn: '7d' }
+    );
 
-      await prisma.usuario.update({
-        where: { id: userId },
-        data: { rol },
-      });
+    // Actualizar las cookies con los nuevos tokens
+    res.cookie('token', accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 1000, // 1 hora
+      sameSite: 'Strict',
+      path: '/',
+    });
 
-      // Enviar el userId en la respuesta
-      res.status(200).json({ message: 'Rol seleccionado con éxito', userId });
-    } catch (err) {
-      return res.status(500).json({ message: 'Error al verificar el token', error: err.message });
-    }
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+      sameSite: 'Strict',
+      path: '/',
+    });
+
+    res.status(200).json({ message: 'Rol seleccionado con éxito', userId });
   } catch (error) {
     console.error('Error al seleccionar rol:', error);
     res.status(500).json({ message: 'Error al seleccionar rol' });

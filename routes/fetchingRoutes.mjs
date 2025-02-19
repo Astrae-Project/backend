@@ -1,5 +1,5 @@
 import express from 'express';
-import { datosUsuario, datosPortfolio, gruposUsuario, movimientosRecientes, obtenerContacto, obtenerEventos, startupsRecomendadas, usuarioEspecifico, obtenerHistoricos, todasStartups, todosGrupos, movimientosSinEventos, movimientosSeguidos, todosUsuarios, obtenerNotificaciones, obtenerOferta } from '../controllers/fetchController.mjs';
+import { datosUsuario, datosPortfolio, gruposUsuario, movimientosRecientes, obtenerContacto, obtenerEventos, startupsRecomendadas, usuarioEspecifico, obtenerHistoricos, todasStartups, todosGrupos, movimientosSinEventos, movimientosSeguidos, todosUsuarios, obtenerNotificaciones, obtenerOferta, movimientosInversionStartups } from '../controllers/fetchController.mjs';
 
 const router = express.Router();
 
@@ -25,6 +25,7 @@ router.get('/todos-grupos', todosGrupos);
 router.get('/todos-usuarios', todosUsuarios);
 router.get('/movimientos-recientes', movimientosRecientes);
 router.get('/movimientos-sin-eventos', movimientosSinEventos);
+router.get('/movimientos-inversion', movimientosInversionStartups);
 router.get('/movimientos-seguidos', movimientosSeguidos);
 router.get('/contacto', obtenerContacto);
 router.get('/eventos', obtenerEventos);

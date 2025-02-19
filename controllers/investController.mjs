@@ -364,9 +364,9 @@ export const offerRejected = async (req, res) => {
 export const counteroffer = async (req, res) => {
   const ofertaId = parseInt(req.params.id_oferta);
   const userId = parseInt(req.params.id_usuario);
-  const { monto_ofrecido, porcentaje_ofrecido } = req.body;
+  const { contraoferta_monto, contraoferta_porcentaje } = req.body;
 
-  if (!monto_ofrecido || !porcentaje_ofrecido) {
+  if (!contraoferta_monto || !contraoferta_porcentaje) {
     return res.status(400).json({ message: 'Faltan campos requeridos' });
   }
 
@@ -374,13 +374,13 @@ export const counteroffer = async (req, res) => {
     const oferta = await prisma.oferta.findUnique({
       where: { id: ofertaId },
       include: { 
-        startup: true,
-        escrow: true,
-        inversor: {  // Incluir relación con inversor
-          include: {
-            usuario: true  // Incluir usuario del inversor para notificación
-          }
-        }
+        startup: {
+          include: { usuario: true }
+        },
+        inversor: {
+          include: { usuario: true }
+        },
+        escrow: true  // Incluir escrow sin intentar acceder a sus campos
       },
     });
 
@@ -389,7 +389,7 @@ export const counteroffer = async (req, res) => {
     }
 
     // Verificar que el usuario es dueño de la startup
-    if (oferta.startup.id_usuario !== userId) {
+    if (oferta.startup.usuario.id !== userId) {
       return res.status(403).json({ message: 'No autorizado para contraofertar' });
     }
 
@@ -398,44 +398,44 @@ export const counteroffer = async (req, res) => {
       return res.status(400).json({ message: 'Oferta no disponible para contraoferta' });
     }
 
-    // Transacción para actualizar múltiples entidades
+    // Transacción para actualizar oferta y rechazar escrow si existe
     await prisma.$transaction(async (prisma) => {
       // Actualizar oferta con contraoferta
       await prisma.oferta.update({
         where: { id: ofertaId },
         data: {
-          contraoferta_monto: monto_ofrecido,
-          contraoferta_porcentaje: porcentaje_ofrecido,
+          contraoferta_monto,
+          contraoferta_porcentaje,
           estado: 'pendiente'
         }
       });
 
-      // Rechazar escrow asociado
-      await prisma.escrow.update({
-        where: { id: oferta.escrow.id },  // Acceder a través de la relación
-        data: { estado: 'rechazado' }
-      });
+      // Si hay un escrow, rechazarlo
+      if (oferta.escrow) {
+        await prisma.escrow.update({
+          where: { id: oferta.escrow[0]?.id },  // Acceder al primer escrow disponible
+          data: { estado: 'rechazado' }
+        });
+      }
 
+      // Función para formatear montos
       const formatMonto = (monto) => {
         if (monto >= 1e6) {
-          const millones = monto / 1e6;
-          // Si es entero, sin decimales; si no, con 1 decimal.
-          return `${millones % 1 === 0 ? millones.toFixed(0) : millones.toFixed(1)}M`;
+          return `${(monto / 1e6).toFixed(monto % 1 === 0 ? 0 : 1)}M`;
         } else if (monto >= 1e3) {
-          const miles = monto / 1e3;
-          return `${miles % 1 === 0 ? miles.toFixed(0) : miles.toFixed(1)}K`;
+          return `${(monto / 1e3).toFixed(monto % 1 === 0 ? 0 : 1)}K`;
         } else {
           return monto.toString();
         }
       };
 
-      const montoFormateado = formatMonto(monto_ofrecido) + "€";
+      const montoFormateado = formatMonto(contraoferta_monto) + "€";
 
-      // Crear notificación DENTRO de la transacción
+      // Crear notificación
       await prisma.notificacion.create({
         data: {
-          id_usuario: oferta.inversor.id_usuario,  // Ahora accesible por el include
-          contenido: `Nueva contraoferta de ${oferta.startup.nombre}: ${montoFormateado} (${porcentaje_ofrecido}%)`,
+          id_usuario: oferta.inversor.usuario.id,  // Acceder correctamente al usuario del inversor
+          contenido: `Nueva contraoferta de ${oferta.startup.nombre}: ${montoFormateado} (${contraoferta_porcentaje}%)`,
           tipo: 'contraoferta'
         }
       });
