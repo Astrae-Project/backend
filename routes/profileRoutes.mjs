@@ -8,6 +8,6 @@ router.put('/cambiar-datos', saveContact );
 
 router.post('/resena', darPuntuacion );
 
-router.post('/leido', marcarComoLeido );
+router.put('/leido', marcarComoLeido );
 
 export default router;

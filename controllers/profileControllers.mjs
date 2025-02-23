@@ -140,10 +140,9 @@ export async function darPuntuacion(req, res) {
     }
 }
 
-// Marcar notificaciones como leídas
 export async function marcarComoLeido(req, res) {
-    const { ids } = req.body; // Array con los IDs de las notificaciones
     const token = req.cookies.token;
+    const { id } = req.body; // ID de la notificación seleccionada
   
     if (!token) {
       return res.status(401).json({ message: "No autorizado" });
@@ -153,19 +152,24 @@ export async function marcarComoLeido(req, res) {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const userId = decoded.userId;
   
-      await prisma.notificacion.updateMany({
-        where: {
-          id: { in: ids },
-          id_usuario: userId,
-        },
-        data: {
-          leido: true,
-        },
+      // Verificar que la notificación exista y pertenezca al usuario
+      const notificacion = await prisma.notificacion.findUnique({
+        where: { id },
       });
   
-      res.json({ message: "Notificaciones marcadas como leídas" });
+      if (!notificacion || notificacion.id_usuario !== userId) {
+        return res.status(404).json({ message: "Notificación no encontrada" });
+      }
+  
+      // Actualizar el estado de la notificación a leido
+      await prisma.notificacion.update({
+        where: { id },
+        data: { leido: true },
+      });
+  
+      res.json({ message: "Notificación marcada como leída" });
     } catch (error) {
-      console.error("Error al marcar notificaciones como leídas:", error);
+      console.error("Error al marcar notificación como leída:", error);
       res.status(500).json({ error: "Error interno del servidor" });
     }
   }
