@@ -52,7 +52,7 @@ export const offer = async (req, res) => {
         id_startup,
         monto_ofrecido,
         porcentaje_ofrecido,
-        estado: 'pendiente',
+        estado: 'Pendiente',
         escrow_id: null, // Inicialmente se deja en null
       },
     });
@@ -62,7 +62,7 @@ export const offer = async (req, res) => {
       data: {
         id_oferta: oferta.id,
         monto: monto_ofrecido,
-        estado: 'pendiente',
+        estado: 'Pendiente',
       },
     });
 
@@ -158,7 +158,7 @@ export const offerAccepted = async (req, res) => {
     }
 
     // Verificar que la oferta no haya sido aceptada o rechazada previamente
-    if (oferta.estado === 'aceptada' || oferta.estado === 'rechazada') {
+    if (oferta.estado === 'Aceptada' || oferta.estado === 'Rechazada') {
       return res.status(400).json({ message: 'Esta oferta ya ha sido aceptada o rechazada' });
     }
 
@@ -169,13 +169,13 @@ export const offerAccepted = async (req, res) => {
       // Actualizar el estado de la oferta
       await prisma.oferta.update({
         where: { id: ofertaId },
-        data: { estado: 'aceptada' },
+        data: { estado: 'Aceptada' },
       });
 
       // Actualizar el estado del escrow
       await prisma.escrow.update({
         where: { id: oferta.escrow_id },
-        data: { estado: 'aceptado' },
+        data: { estado: 'Aceptado' },
       });
 
       // Crear una nueva inversión
@@ -210,8 +210,15 @@ export const offerAccepted = async (req, res) => {
       });
     });
 
-    // Calcular el valor de la inversión basado en la valoración de la startup
+    // Calcular la valoración de la startup
     const valoracion = await calcularValoracion(oferta.id_startup);
+
+    // Verificar que la valoración sea válida
+    if (valoracion == null || valoracion === undefined) {
+      return res.status(400).json({ message: 'Valoración no disponible para la startup' });
+    }
+
+    // Calcular el valor de la inversión basado en la valoración de la startup
     const valor = valoracion * (oferta.porcentaje_ofrecido / 100);
 
     // Actualizar el valor de la inversión
@@ -224,11 +231,13 @@ export const offerAccepted = async (req, res) => {
     await actualizarValoresInversiones(oferta.id_startup, valoracion);
 
     // Registrar la valoración histórica de la startup
-    await prisma.ValoracionHistorica.create({
+    await prisma.valoracionHistorica.create({
       data: {
-        startupId: oferta.id_startup,
-        valoracion: valoracion,
+        valoracion: valoracion, // Asegúrate de que esto es un valor numérico o decimal válido
         fecha: new Date(),
+        startup: {
+          connect: { id: oferta.id_startup },
+        },
       },
     });
 
@@ -306,18 +315,18 @@ export const offerRejected = async (req, res) => {
     }
 
     // Verificar si la oferta ya ha sido aceptada o rechazada
-    if (oferta.estado === 'aceptada' || oferta.estado === 'rechazada') {
+    if (oferta.estado === 'Aceptada' || oferta.estado === 'Rechazada') {
       return res.status(400).json({ message: 'Esta oferta ya ha sido aceptada o rechazada' });
     }
 
     await prisma.oferta.update({
       where: { id: ofertaId },
-      data: { estado: 'rechazada' },
+      data: { estado: 'Rechazada' },
     });
 
     await prisma.escrow.update({
       where: { id: oferta.escrow_id },
-      data: { estado: 'rechazado' },
+      data: { estado: 'Rechazado' },
     });
 
         // Verificar que el usuario inversor exista
@@ -394,7 +403,7 @@ export const counteroffer = async (req, res) => {
     }
 
     // Validar estado actual de la oferta
-    if (oferta.estado !== 'pendiente' || oferta.contraoferta_monto !== null) {
+    if (oferta.estado !== 'Pendiente' || oferta.contraoferta_monto !== null) {
       return res.status(400).json({ message: 'Oferta no disponible para contraoferta' });
     }
 
@@ -406,7 +415,7 @@ export const counteroffer = async (req, res) => {
         data: {
           contraoferta_monto,
           contraoferta_porcentaje,
-          estado: 'pendiente'
+          estado: 'Pendiente'
         }
       });
 
@@ -414,7 +423,7 @@ export const counteroffer = async (req, res) => {
       if (oferta.escrow) {
         await prisma.escrow.update({
           where: { id: oferta.escrow[0]?.id },  // Acceder al primer escrow disponible
-          data: { estado: 'rechazado' }
+          data: { estado: 'Rechazado' }
         });
       }
 
@@ -492,7 +501,7 @@ export const acceptCounteroffer = async (req, res) => {
       await prisma.oferta.update({
         where: { id: ofertaId },
         data: {
-          estado: 'aceptada',
+          estado: 'Aceptada',
           monto_ofrecido: oferta.contraoferta_monto,
           porcentaje_ofrecido: porcentajeContraofrecido,
         },
@@ -617,14 +626,14 @@ export const rejectCounteroffer = async (req, res) => {
     }
 
     // Verificar si la contraoferta ya ha sido aceptada o rechazada
-    if (oferta.estado === 'aceptada' || oferta.estado === 'rechazada') {
+    if (oferta.estado === 'Aceptada' || oferta.estado === 'Rechazada') {
       return res.status(400).json({ message: 'Esta contraoferta ya ha sido aceptada o rechazada' });
     }
 
     // Actualizar la oferta a rechazada
     await prisma.oferta.update({
       where: { id: ofertaId },
-      data: { estado: 'rechazada' },
+      data: { estado: 'Rechazada' },
     });
 
     const formatMonto = (monto) => {

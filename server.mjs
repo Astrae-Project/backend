@@ -5,63 +5,94 @@ import cookieParser from 'cookie-parser';
 import authRoutes from './routes/auth.mjs';
 import investRoutes from './routes/investRoutes.mjs';
 import searchingRoutes from './routes/searchingRoutes.mjs';
+import fetchingRoutes from './routes/fetchingRoutes.mjs';
+import groupesRoutes from './routes/groupesRoutes.mjs';
+import profileRoutes from './routes/profileRoutes.mjs';
+import eventRoutes from './routes/eventRoutes.mjs';
+import followRoutes from './routes/followRoutes.mjs';
 import { PrismaClient } from '@prisma/client';
 import { verifyToken } from './middlewares/tokenMiddleware.mjs';
-import fetchingRoutes from './routes/fetchingRoutes.mjs';
-import groupesRoutes from './routes/groupesRoutes.mjs'
-import profileRoutes from './routes/profileRoutes.mjs'
-import eventRoutes from './routes/eventRoutes.mjs'
-import followRoutes from './routes/followRoutes.mjs'
+import { createServer } from 'node:http';
+import { Server } from 'socket.io';
 
 // Configuración de variables de entorno
 dotenv.config();
-
-const app = express();
 const port = process.env.PORT || 5000;
+
+// Crear instancia de Express y servidor HTTP
+const app = express();
+const server = createServer(app);
+
+// Configurar Socket.io
+const io = new Server(server, {
+  cors: {
+    origin: process.env.FRONTEND_ORIGIN || ['http://localhost:4321', 'http://localhost:3000'],
+    methods: ['GET', 'POST'],
+    credentials: true
+  }
+});
+
+io.on('connection', (socket) => {
+  console.log('Usuario conectado', socket.id);
+
+  socket.on('disconnect', () => {
+    console.log('Usuario desconectado', socket.id);
+  });
+
+  // Puedes agregar aquí otros eventos o lógica para Socket.io
+});
 
 // Crear instancia del cliente Prisma
 const prisma = new PrismaClient();
 
-// Middleware
+// Middlewares generales
 app.use(cors({
-  origin: ['http://localhost:4321', 'http://localhost:3000'], // Asegúrate de poner el origen correcto de tu frontend
-  methods: ['POST', 'GET', 'PUT', 'DELETE'],
+  origin: process.env.FRONTEND_ORIGIN 
+    ? process.env.FRONTEND_ORIGIN.split(',') 
+    : ['http://localhost:4321', 'http://localhost:3000'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true
 }));
-
-app.use(express.json()); // Parsear JSON
+app.use(express.json());
 app.use(cookieParser());
 
-
-// Rutas  
+// Rutas sin protección (por ejemplo, autenticación)
 app.use('/api/auth', authRoutes);
-app.use('/api/invest', investRoutes, verifyToken);
-app.use('/api/search', searchingRoutes, verifyToken);
-app.use('/api/data', fetchingRoutes, verifyToken)
-app.use('/api/grupos', groupesRoutes)
-app.use('/api/perfil', profileRoutes)
-app.use('/api/evento', eventRoutes)
-app.use('/api/follow', followRoutes)
+
+// Rutas protegidas por token: se recomienda aplicar primero el middleware de verificación
+app.use('/api/invest', verifyToken, investRoutes);
+app.use('/api/search', verifyToken, searchingRoutes);
+app.use('/api/data', verifyToken, fetchingRoutes);
+app.use('/api/grupos', verifyToken, groupesRoutes);
+app.use('/api/perfil', verifyToken, profileRoutes);
+app.use('/api/evento', verifyToken, eventRoutes);
+app.use('/api/follow', verifyToken, followRoutes);
 
 // Ruta principal
 app.get('/', (req, res) => {
   res.send('Backend funcionando');
 });
 
+// Middleware global de manejo de errores (opcional pero recomendado)
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ error: 'Error interno del servidor' });
+});
+
 // Iniciar el servidor
 const startServer = async () => {
   try {
-    // Verificar conexión a la base de datos
+    // Conectar a la base de datos
     await prisma.$connect();
     console.log('Conectado a la base de datos');
 
-    // Iniciar el servidor solo después de conectar la base de datos
-    app.listen(port, () => {
+    // Iniciar el servidor HTTP
+    server.listen(port, () => {
       console.log(`Servidor corriendo en http://localhost:${port}`);
     });
   } catch (err) {
     console.error('Error al conectar a la base de datos', err);
-    process.exit(1); // Salir del proceso con error
+    process.exit(1);
   }
 };
 

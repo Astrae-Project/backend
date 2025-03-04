@@ -699,57 +699,54 @@ export async function startupsRecomendadas (req, res) {
     }
 };
 
-
-export async function startupsSeguidas (req, res)  {
+export async function startupsSeguidas(req, res) {
     try {
-        const token = req.cookies.token;
-
-        if (!token) {
-            return res.status(402).json({ message: 'Token no proporcionado' });
-        }
-
-        const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-        const userId = decodedToken.userId;
-
-        if (!userId) {
-            return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
-        }
-    
-      // Obtener startups seguidas por el usuario
-      const startups = await prisma.startup.findMany({
-        where: {
-          usuario: {
-            seguidos: {
-              some: {
-                seguidor: { id: userId }, // Filtrar por los usuarios seguidos por el usuario actual
-              },
-            },
-          },
-        },
-        take: 10, // Limitar el número de resultados
-        orderBy: {
-          id: 'desc', // Ordenar según tus necesidades
-        },
+      const token = req.cookies.token;
+      if (!token) {
+        return res.status(402).json({ message: 'Token no proporcionado' });
+      }
+  
+      const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+      const userId = decodedToken.userId;
+      if (!userId) {
+        return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
+      }
+  
+      // Buscar el usuario logueado e incluir sus seguidos cuyo usuario seguido tenga rol "startup"
+      const usuarioConSeguidos = await prisma.usuario.findUnique({
+        where: { id: userId },
         include: {
-          usuario: {
+          seguidos: {
+            where: {
+              seguido: {
+                rol: 'startup' // Filtro: solo los seguidos con rol startup
+              }
+            },
+            take: 10, // Limitar resultados
+            orderBy: {
+              id: 'desc'
+            },
             select: {
-              username: true,
-              avatar: true,
-            },
-          },
-          inversiones: {
-            include: {
-              inversor: true, // Incluir datos de los inversores
-            },
-          },
-        },
+              // Se selecciona la información del usuario seguido
+              seguido: {
+                select: {
+                  startups: true,
+                  username: true,
+                  avatar: true,
+                }
+              }
+            }
+          }
+        }
       });
   
-      if (!startups || startups.length === 0) {
+      if (!usuarioConSeguidos || usuarioConSeguidos.seguidos.length === 0) {
         return res.status(404).json({ message: 'No se encontraron startups seguidas' });
       }
   
-      // Devolver las startups seguidas
+      // Extraer la información del usuario seguido, eliminando el nivel de "seguido"
+      const startups = usuarioConSeguidos.seguidos.map(s => s.seguido);
+  
       res.json({ startups });
     } catch (error) {
       console.error(error);
@@ -792,6 +789,7 @@ export async function datosPortfolio(req, res) {
                             select: {
                                 nombre: true,
                                 valoracion: true,
+                                sector: true,
                                 usuario: { // Incluir el usuario de la startup
                                     select: {
                                         avatar: true, // Seleccionar el avatar
@@ -1570,38 +1568,69 @@ export async function obtenerOferta(req, res) {
             return res.status(401).json({ message: "No autorizado. Token no proporcionado." });
         }
 
+        // Decodificar token
         const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
         const userId = decodedToken?.userId;
+        const userRole = decodedToken?.role; // Asegúrate de que el token incluye el rol
 
         if (!userId || typeof userId !== "number") {
             return res.status(400).json({ message: "ID de usuario no válido." });
         }
 
-        // Obtener solo las ofertas pendientes del usuario (startups que le pertenecen)
-        const ofertas = await prisma.oferta.findMany({
-            where: {
-                startup: {
-                    id_usuario: userId,  // Verifica que `id_usuario` exista en el modelo Startup
-                },
-                estado: "pendiente",
-            },
-            include: {
-                inversor: {
-                    include: {
-                        usuario: true, // Se incluye la relación con usuario dentro de inversor
+        let ofertas;
+
+        if (userRole === "startup") {
+            // Buscar ofertas recibidas por sus startups
+            ofertas = await prisma.oferta.findMany({
+                where: {
+                    startup: {
+                        id_usuario: userId, // Solo startups del usuario
                     },
+                    estado: "pendiente",
                 },
-                startup: {
-                    include: {
-                        usuario: true, // Se incluye la relación con usuario dentro de startup
+                include: {
+                    inversor: {
+                        include: {
+                            usuario: true,
+                        },
                     },
+                    startup: {
+                        include: {
+                            usuario: true,
+                        },
+                    },
+                    escrow: true,
                 },
-                escrow: true,
-            },
-        });
+            });
+        } else if (userRole === "inversor") {
+            // Buscar ofertas hechas por el inversor
+            ofertas = await prisma.oferta.findMany({
+                where: {
+                    id_inversor: userId, // Ofertas hechas por este inversor
+                },
+                include: {
+                    inversor: {
+                        include: {
+                            usuario: true,
+                        },
+                    },
+                    startup: {
+                        include: {
+                            usuario: true,
+                        },
+                    },
+                    escrow: true,
+                },
+                orderBy: {
+                    fecha_creacion: 'desc', // Ordenar de más nueva a más vieja
+                },
+            });
+        } else {
+            return res.status(403).json({ message: "Acceso denegado. Rol no válido." });
+        }
 
         if (!ofertas || ofertas.length === 0) {
-            return res.status(404).json({ message: "No hay ofertas pendientes." });
+            return res.status(404).json({ message: "No se encontraron ofertas." });
         }
 
         return res.json(ofertas);
@@ -1610,7 +1639,6 @@ export async function obtenerOferta(req, res) {
         return res.status(500).json({ error: "Error interno del servidor." });
     }
 }
-
 
 export async function obtenerEventos(req, res) {
     const token = req.cookies.token;
