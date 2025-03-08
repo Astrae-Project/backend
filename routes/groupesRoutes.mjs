@@ -25,10 +25,10 @@ router.post('/añadir/:grupoId/miembro/:usuarioId', addMember);
 router.delete('/eliminar/:grupoId/miembro/:usuarioId', dropMember);
 
 // Enviar Mensaje en el Grupo
-router.post('/enviar/:grupoId/mensajes', sendMessage);
+router.post('/enviar/:groupId/mensajes', sendMessage);
 
 // Ver Mensajes de un Grupo
-router.get('/ver/:grupoId/mensajes', seeMessage);
+router.get('/ver/:groupId/mensajes', seeMessage);
 
 // Cambiar Rol de un Miembro
 router.put('/cambio-rol/:grupoId/miembros/:usuarioId', changeRole);

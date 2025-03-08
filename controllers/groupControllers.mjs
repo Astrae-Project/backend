@@ -489,24 +489,30 @@ export const sendMessage = async (req, res) => {
     }
 
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-    const userId = parseInt(decodedToken.userId, 10);
 
+    const userId = parseInt(decodedToken.userId, 10);
     if (!userId) {
       return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
     }
+    
+    const { groupId } = req.params; 
 
-    const { groupId } = req.params; // Se espera que groupId venga en la URL, por ejemplo: /api/grupos/:groupId/mensajes
     const { contenido } = req.body;
 
     if (!contenido || contenido.trim() === '') {
       return res.status(400).json({ message: 'El mensaje no puede estar vacío' });
     }
 
-    // Verificar que el usuario es miembro del grupo
+    const parsedGroupId = parseInt(String(groupId).trim(), 10);
+
+    if (isNaN(parsedGroupId)) {
+      return res.status(400).json({ message: 'groupId no es un número válido' });
+    }
+
     const miembro = await prisma.grupoUsuario.findFirst({
       where: {
         id_usuario: userId,
-        id_grupo: parseInt(groupId, 10),
+        id_grupo: parsedGroupId,
       },
     });
 
@@ -514,49 +520,53 @@ export const sendMessage = async (req, res) => {
       return res.status(403).json({ message: 'No eres miembro de este grupo' });
     }
 
-    // Guardar el mensaje en la base de datos
     const mensaje = await prisma.mensaje.create({
       data: {
-        id_grupo: parseInt(groupId, 10),
-        id_usuario: userId,
+        id_grupo: parsedGroupId,
+        id_emisor: userId,
+        id_receptor: userId,
         contenido: contenido.trim(),
       },
     });
 
     res.status(201).json({ message: 'Mensaje enviado con éxito', mensaje });
   } catch (error) {
-    console.error('Error al enviar mensaje:', error);
+    console.error("❌ Error al enviar mensaje:", error);
     res.status(500).json({ message: 'Error al enviar mensaje', error: error.message });
   }
 };
 
-// Endpoint para obtener los mensajes de un grupo
 export const seeMessage = async (req, res) => {
   try {
-    const { groupId } = req.params; // Se espera que groupId venga en la URL, por ejemplo: /api/grupos/:groupId/mensajes
+    const { groupId } = req.params;
+    const parsedGroupId = parseInt(String(groupId).trim(), 10);
+    if (isNaN(parsedGroupId)) {
+      return res.status(400).json({ message: 'groupId no es un número válido' });
+    }
 
     // Verificar que el grupo existe
     const grupo = await prisma.grupo.findUnique({
-      where: { id: parseInt(groupId, 10) },
+      where: { id: parsedGroupId },
     });
-
     if (!grupo) {
       return res.status(404).json({ message: 'Grupo no encontrado' });
     }
 
     // Recuperar los mensajes del grupo, ordenados de más antiguo a más reciente,
-    // e incluir los datos básicos del usuario que envió cada mensaje
+    // e incluir los datos básicos del usuario que envió cada mensaje (campo "emisor")
     const mensajes = await prisma.mensaje.findMany({
-      where: { id_grupo: parseInt(groupId, 10) },
+      where: { id_grupo: parsedGroupId },
       orderBy: { fecha_envio: 'asc' },
       include: {
-        usuario: {
+        emisor: {
           select: { id: true, username: true },
         },
       },
     });
 
-    res.status(200).json({ mensajes });
+    const ultimoMensaje = mensajes.length > 0 ? mensajes[mensajes.length - 1] : null;
+
+    res.status(200).json({ mensajes, ultimoMensaje });
   } catch (error) {
     console.error('Error al obtener mensajes:', error);
     res.status(500).json({ message: 'Error al obtener mensajes', error: error.message });
