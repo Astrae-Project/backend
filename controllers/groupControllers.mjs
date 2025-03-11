@@ -227,6 +227,7 @@ export const dropGroup = async (req, res) => {
           descripcion: grupo.descripcion,
           tipo: grupo.tipo,
           miembros,  // Lista de miembros con sus roles
+          fecha_creacion: grupo.fecha_creacion,
       });
 
   } catch (error) {
