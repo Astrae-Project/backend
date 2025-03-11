@@ -33,6 +33,7 @@ export async function datosUsuario (req, res) {
                             avatar: true,
                             pais: true,
                             ciudad: true,
+                            id: true,
                         },
                     },
                     inversiones: {
@@ -115,6 +116,7 @@ export async function datosUsuario (req, res) {
                             seguidores: true,
                             username: true,
                             fecha_creacion: true,
+                            id: true,
                         },
                     },
                     inversiones: {
