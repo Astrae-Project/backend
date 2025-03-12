@@ -218,6 +218,7 @@ export const dropGroup = async (req, res) => {
           id: grupoUsuario.usuario.id,
           username: grupoUsuario.usuario.username,
           rol: grupoUsuario.rol,
+          avatar: grupoUsuario.usuario.avatar,
       }));
 
       // Respuesta con la información del grupo y sus miembros
@@ -553,8 +554,6 @@ export const seeMessage = async (req, res) => {
       return res.status(404).json({ message: 'Grupo no encontrado' });
     }
 
-    // Recuperar los mensajes del grupo, ordenados de más antiguo a más reciente,
-    // e incluir los datos básicos del usuario que envió cada mensaje (campo "emisor")
     const mensajes = await prisma.mensaje.findMany({
       where: { id_grupo: parsedGroupId },
       orderBy: { fecha_envio: 'asc' },
