@@ -237,6 +237,57 @@ export const dropGroup = async (req, res) => {
   }
 };
 
+export const fueraGrupo = async (req, res) => {
+  try {
+    const { grupoId } = req.params;
+
+    if (!grupoId) {
+      return res.status(400).json({ message: 'ID del grupo no proporcionado' });
+    }
+
+    const parsedGroupId = parseInt(grupoId, 10);
+
+    // Verificar que el grupo existe
+    const grupo = await prisma.grupo.findUnique({
+      where: { id: parsedGroupId },
+    });
+
+    if (!grupo) {
+      return res.status(404).json({ error: 'Grupo no encontrado' });
+    }
+
+    // Obtener IDs de usuarios que ya son miembros del grupo
+    const miembrosGrupo = await prisma.grupoUsuario.findMany({
+      where: { id_grupo: parsedGroupId },
+      select: { id_usuario: true },
+    });
+
+    // Filtrar valores undefined y obtener solo los ID válidos
+    const usuariosIdsEnGrupo = miembrosGrupo
+      .map(miembro => miembro.id_usuario)
+      .filter(id => id !== undefined && id !== null); // Asegurar que no haya valores inválidos
+
+    // Obtener usuarios que NO están en el grupo
+    const usuariosDisponibles = await prisma.usuario.findMany({
+      where: {
+        id: {
+          notIn: usuariosIdsEnGrupo.length > 0 ? usuariosIdsEnGrupo : [-1], // Evitar error si está vacío
+        },
+      },
+      select: {
+        id: true,
+        username: true,
+        avatar: true,
+      },
+    });
+
+    return res.status(200).json(usuariosDisponibles);
+  } catch (error) {
+    console.error('Error al obtener usuarios disponibles:', error);
+    return res.status(500).json({ error: 'Error al obtener usuarios disponibles' });
+  }
+};
+
 export const changeData = async (req, res) => {
   try {
     const token = req.cookies.token;

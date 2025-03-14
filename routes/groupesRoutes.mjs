@@ -1,5 +1,5 @@
 import express from 'express';
-import { createGroup, dropGroup, dataGroup, changeData, addMember, dropMember, sendMessage, seeMessage, changeRole, joinGroup } from '../controllers/groupControllers.mjs';
+import { createGroup, dropGroup, dataGroup, changeData, addMember, dropMember, sendMessage, seeMessage, changeRole, joinGroup, fueraGrupo } from '../controllers/groupControllers.mjs';
 
 const router = express.Router();
 
@@ -17,6 +17,8 @@ router.put('/datos/:grupoId', changeData);
 
 // Obtener Información de un Grupo
 router.get('/data/:grupoId', dataGroup);
+
+router.get('/disponible/:grupoId', fueraGrupo);
 
 // Añadir Miembro a un Grupo
 router.post('/añadir/:grupoId/miembro/:usuarioId', addMember);
