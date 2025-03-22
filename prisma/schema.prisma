@@ -32,6 +32,7 @@ model Usuario {
   suscriptores        Suscripcion[]  @relation("suscriptores")
   suscritos           Suscripcion[]  @relation("suscritos")
   Sesion              Sesion[]
+  Grupo               Grupo[]
 }
 
 model Sesion {
@@ -201,6 +202,7 @@ model Grupo {
   fecha_creacion DateTime       @default(now())
   foto_grupo     String?
   id_usuario     Int
+  creador        Usuario        @relation(fields: [id_usuario], references: [id]) // Relación con Usuario
   usuarios       GrupoUsuario[]
   mensajes       Mensaje[]
 }

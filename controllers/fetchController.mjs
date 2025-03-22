@@ -1794,7 +1794,7 @@ export async function obtenerHistoricos(req, res) {
           orderBy: {
             fecha_creacion: "desc",
           },
-          take: 4,
+          take: 5,
         });    
   
       res.json(notificaciones);

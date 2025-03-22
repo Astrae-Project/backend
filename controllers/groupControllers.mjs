@@ -46,7 +46,6 @@ export const joinGroup = async (req, res) => {
   try {
     const token = req.cookies.token;
 
-    // Verifica que el token esté presente
     if (!token) {
       return res.status(401).json({ message: 'Token no proporcionado' });
     }
@@ -54,7 +53,6 @@ export const joinGroup = async (req, res) => {
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decodedToken.userId;
 
-    // Verifica que el token contenga un ID de usuario
     if (!userId) {
       return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
     }
@@ -62,12 +60,10 @@ export const joinGroup = async (req, res) => {
     const { grupoId } = req.params;
     const parsedGroupId = parseInt(grupoId, 10);
 
-    // Verifica que el ID del grupo sea válido
     if (isNaN(parsedGroupId)) {
       return res.status(400).json({ message: 'ID de grupo inválido' });
     }
 
-    // Verifica si el grupo existe
     const grupo = await prisma.grupo.findUnique({
       where: { id: parsedGroupId },
     });
@@ -76,7 +72,6 @@ export const joinGroup = async (req, res) => {
       return res.status(404).json({ message: 'Grupo no encontrado' });
     }
 
-    // Verifica si el usuario ya está en el grupo
     const relacionExistente = await prisma.grupoUsuario.findUnique({
       where: {
         id_grupo_id_usuario: {
@@ -94,26 +89,36 @@ export const joinGroup = async (req, res) => {
       return res.status(406).json({ message: 'Este grupo es privado, necesitas una invitación para unirte' });
     }
 
-    // Crea la relación entre el usuario y el grupo
+    // Obtener el nombre de usuario
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: userId },
+      select: { username: true },
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    // Crear la relación entre el usuario y el grupo
     await prisma.grupoUsuario.create({
       data: {
         id_grupo: parsedGroupId,
         id_usuario: userId,
-        rol: 'miembro', // Asigna el rol predeterminado al usuario
+        rol: 'miembro',
       },
     });
 
-    // Obtener a los participantes del evento
+    // Obtener a los participantes del grupo
     const participantes = await prisma.grupoUsuario.findMany({
       where: { id_grupo: parsedGroupId },
       select: { id_usuario: true },
     });
-      
-    // Crear notificaciones para los participantes
+
+    // Crear notificaciones para los participantes con el username del usuario que se unió
     await prisma.notificacion.createMany({
       data: participantes.map((p) => ({
         id_usuario: p.id_usuario,
-        contenido: `Un usuario se ha unido al grupo ${grupo.nombre}`,
+        contenido: `@${usuario.username} se ha unido al grupo ${grupo.nombre}`,
         tipo: 'grupo',
       })),
     });
@@ -124,7 +129,6 @@ export const joinGroup = async (req, res) => {
     res.status(500).json({ message: 'Error al unirse al grupo' });
   }
 };
-
 
 export const dropGroup = async (req, res) => {
   try {
@@ -144,21 +148,23 @@ export const dropGroup = async (req, res) => {
     const { grupoId } = req.params;
     const parsedGroupId = parseInt(grupoId, 10);
 
-    // Verifica si el grupoId es un número válido
     if (isNaN(parsedGroupId)) {
       return res.status(400).json({ message: 'ID de grupo inválido' });
     }
 
-    // Verifica si el grupo existe
+    // Verificar si el grupo existe
     const grupo = await prisma.grupo.findUnique({
       where: { id: parsedGroupId },
+      include: {
+        miembros: true, // Obtener todos los miembros del grupo
+      },
     });
 
     if (!grupo) {
       return res.status(404).json({ message: 'Grupo no encontrado' });
     }
 
-    // Verifica si el usuario está en el grupo
+    // Verificar si el usuario está en el grupo
     const relacion = await prisma.grupoUsuario.findUnique({
       where: {
         id_grupo_id_usuario: {
@@ -172,7 +178,21 @@ export const dropGroup = async (req, res) => {
       return res.status(403).json({ message: 'No estás en este grupo' });
     }
 
-    // Elimina la relación del usuario con el grupo
+    // Verificar si el usuario es el único administrador del grupo
+    const administradores = await prisma.grupoUsuario.findMany({
+      where: {
+        id_grupo: parsedGroupId,
+        rol: 'administrador', // Asumiendo que el campo 'rol' indica si es administrador
+      },
+    });
+
+    if (administradores.length === 1 && administradores[0].id_usuario === userId) {
+      return res.status(403).json({
+        message: 'Eres el único administrador. Debes asignar otro administrador antes de salir.',
+      });
+    }
+
+    // Eliminar la relación del usuario con el grupo
     await prisma.grupoUsuario.delete({
       where: {
         id_grupo_id_usuario: {
@@ -189,51 +209,59 @@ export const dropGroup = async (req, res) => {
   }
 };
 
-  export const dataGroup = async (req, res) => {
-    try {
-      const { grupoId } = req.params; // Suponiendo que pasas el id del grupo en los parámetros de la URL
 
-      if (!grupoId) {
-          return res.status(400).json({ message: 'ID del grupo no proporcionado' });
-      }
+export const dataGroup = async (req, res) => {
+  try {
+    const { grupoId } = req.params;
 
-      // Consulta el grupo con sus usuarios y roles asociados
-      const grupo = await prisma.grupo.findUnique({
-          where: { id: parseInt(grupoId) }, // Busca por el ID del grupo
+    if (!grupoId) {
+      return res.status(400).json({ message: 'ID del grupo no proporcionado' });
+    }
+
+    // Buscar el grupo e incluir usuarios y el creador
+    const grupo = await prisma.grupo.findUnique({
+      where: { id: parseInt(grupoId) },
+      include: {
+        usuarios: {
           include: {
-              usuarios: {
-                  include: {
-                      usuario: true, // Incluye los datos del usuario relacionados
-                  },
-              },
+            usuario: true, // Incluye los datos del usuario en la lista de miembros
           },
-      });
+        },
+        creador: true, // Incluir el creador del grupo
+      },
+    });
 
-      if (!grupo) {
-          return res.status(404).json({ message: 'Grupo no encontrado' });
-      }
+    if (!grupo) {
+      return res.status(404).json({ message: 'Grupo no encontrado' });
+    }
 
-      // Formateamos la información de los miembros y roles
-      const miembros = grupo.usuarios.map((grupoUsuario) => ({
-          id: grupoUsuario.usuario.id,
-          username: grupoUsuario.usuario.username,
-          rol: grupoUsuario.rol,
-          avatar: grupoUsuario.usuario.avatar,
-      }));
+    // Formateamos la información de los miembros y roles
+    const miembros = grupo.usuarios.map((grupoUsuario) => ({
+      id: grupoUsuario.usuario.id,
+      username: grupoUsuario.usuario.username,
+      rol: grupoUsuario.rol,
+      avatar: grupoUsuario.usuario.avatar,
+    }));
 
-      // Respuesta con la información del grupo y sus miembros
-      return res.status(200).json({
-          id: grupo.id,
-          nombre: grupo.nombre,
-          descripcion: grupo.descripcion,
-          tipo: grupo.tipo,
-          miembros,  // Lista de miembros con sus roles
-          fecha_creacion: grupo.fecha_creacion,
-      });
+    // Respuesta con la información del grupo
+    return res.status(200).json({
+      id: grupo.id,
+      nombre: grupo.nombre,
+      descripcion: grupo.descripcion,
+      tipo: grupo.tipo,
+      fecha_creacion: grupo.fecha_creacion,
+      foto_grupo: grupo.foto_grupo,
+      miembros,
+      creador: {
+        id: grupo.creador.id,
+        username: grupo.creador.username,
+        avatar: grupo.creador.avatar,
+      },
+    });
 
   } catch (error) {
-      console.error('Error al obtener la información del grupo:', error);
-      return res.status(500).json({ message: 'Error al obtener la información del grupo' });
+    console.error('Error al obtener la información del grupo:', error);
+    return res.status(500).json({ message: 'Error al obtener la información del grupo' });
   }
 };
 
