@@ -205,6 +205,7 @@ model Grupo {
   creador        Usuario        @relation(fields: [id_usuario], references: [id]) // Relación con Usuario
   usuarios       GrupoUsuario[]
   mensajes       Mensaje[]
+  eventos        Evento[]
 }
 
 model GrupoUsuario {
@@ -221,6 +222,7 @@ model GrupoUsuario {
 model Evento {
   id              Int            @id @default(autoincrement())
   id_usuario      Int
+  id_grupo        Int
   descripcion     String         @db.VarChar(255)
   fecha_evento    DateTime       @default(now())
   tipo_movimiento TipoMovimiento @default(evento)
@@ -228,6 +230,7 @@ model Evento {
   tipo            Tipo
   fecha_creacion  DateTime       @default(now())
   creador         Usuario        @relation("CreadorEventos", fields: [id_usuario], references: [id])
+  grupo           Grupo?         @relation(fields: [id_grupo], references: [id], onDelete: Cascade) // Relación opcional
   participantes   Participante[]
 }
 
