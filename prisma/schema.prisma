@@ -205,7 +205,6 @@ model Grupo {
   creador              Usuario                @relation(fields: [id_usuario], references: [id]) // Relación con Usuario
   usuarios             GrupoUsuario[]
   mensajes             Mensaje[]
-  eventos              Evento[]
   ConfiguracionPermiso ConfiguracionPermiso[]
 }
 
@@ -243,7 +242,6 @@ model Evento {
   tipo            Tipo
   fecha_creacion  DateTime       @default(now())
   creador         Usuario        @relation("CreadorEventos", fields: [id_usuario], references: [id])
-  grupo           Grupo?         @relation(fields: [id_grupo], references: [id], onDelete: Cascade) // Relación opcional
   participantes   Participante[]
 }
 
@@ -342,12 +340,7 @@ enum Permiso {
   ver_estadisticas
   invitar_miembros
   expulsar_miembros
-  aprobar_solicitudes
-  crear_publicaciones
-  eliminar_publicaciones
-  fijar_publicaciones
   crear_ofertas
-  gestionar_ofertas
   subir_documentos
   eliminar_documentos
 }
