@@ -213,21 +213,17 @@ export const dropGroup = async (req, res) => {
 export const dataGroup = async (req, res) => {
   try {
     const { grupoId } = req.params;
-
     if (!grupoId) {
       return res.status(400).json({ message: 'ID del grupo no proporcionado' });
     }
 
-    // Buscar el grupo e incluir usuarios y el creador
+    // Busca el grupo, incluye los usuarios, el creador y la configuración de permisos
     const grupo = await prisma.grupo.findUnique({
       where: { id: parseInt(grupoId) },
       include: {
-        usuarios: {
-          include: {
-            usuario: true, // Incluye los datos del usuario en la lista de miembros
-          },
-        },
-        creador: true, // Incluir el creador del grupo
+        usuarios: { include: { usuario: true } },
+        creador: true,
+        ConfiguracionPermiso: true, // Asegúrate de que esta relación exista en el modelo Grupo
       },
     });
 
@@ -235,7 +231,7 @@ export const dataGroup = async (req, res) => {
       return res.status(404).json({ message: 'Grupo no encontrado' });
     }
 
-    // Formateamos la información de los miembros y roles
+    // Formatear los miembros
     const miembros = grupo.usuarios.map((grupoUsuario) => ({
       id: grupoUsuario.usuario.id,
       username: grupoUsuario.usuario.username,
@@ -243,7 +239,13 @@ export const dataGroup = async (req, res) => {
       avatar: grupoUsuario.usuario.avatar,
     }));
 
-    // Respuesta con la información del grupo
+    // Formatear los permisos (configuración de permisos para este grupo)
+    const permisos = grupo.ConfiguracionPermiso.map((cp) => ({
+      permiso: cp.permiso,
+      abierto: cp.abierto,
+    }));
+
+    // Responder con todos los datos
     return res.status(200).json({
       id: grupo.id,
       nombre: grupo.nombre,
@@ -251,14 +253,14 @@ export const dataGroup = async (req, res) => {
       tipo: grupo.tipo,
       fecha_creacion: grupo.fecha_creacion,
       foto_grupo: grupo.foto_grupo,
-      miembros,
       creador: {
         id: grupo.creador.id,
         username: grupo.creador.username,
         avatar: grupo.creador.avatar,
       },
+      miembros,
+      permisos, // Agregamos la configuración de permisos
     });
-
   } catch (error) {
     console.error('Error al obtener la información del grupo:', error);
     return res.status(500).json({ message: 'Error al obtener la información del grupo' });

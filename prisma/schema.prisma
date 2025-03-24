@@ -195,17 +195,18 @@ model Mensaje {
 }
 
 model Grupo {
-  id             Int            @id @default(autoincrement())
-  nombre         String         @db.VarChar(255)
-  descripcion    String         @db.VarChar(255)
-  tipo           Tipo           @default(publico)
-  fecha_creacion DateTime       @default(now())
-  foto_grupo     String?
-  id_usuario     Int
-  creador        Usuario        @relation(fields: [id_usuario], references: [id]) // Relación con Usuario
-  usuarios       GrupoUsuario[]
-  mensajes       Mensaje[]
-  eventos        Evento[]
+  id                   Int                    @id @default(autoincrement())
+  nombre               String                 @db.VarChar(255)
+  descripcion          String                 @db.VarChar(255)
+  tipo                 Tipo                   @default(publico)
+  fecha_creacion       DateTime               @default(now())
+  foto_grupo           String?
+  id_usuario           Int
+  creador              Usuario                @relation(fields: [id_usuario], references: [id]) // Relación con Usuario
+  usuarios             GrupoUsuario[]
+  mensajes             Mensaje[]
+  eventos              Evento[]
+  ConfiguracionPermiso ConfiguracionPermiso[]
 }
 
 model GrupoUsuario {
@@ -213,10 +214,22 @@ model GrupoUsuario {
   id_grupo   Int
   id_usuario Int
   rol        RolGrupo @default(miembro)
-  grupo      Grupo    @relation(fields: [id_grupo], references: [id])
-  usuario    Usuario  @relation(fields: [id_usuario], references: [id])
+
+  grupo   Grupo   @relation(fields: [id_grupo], references: [id])
+  usuario Usuario @relation(fields: [id_usuario], references: [id])
 
   @@unique([id_grupo, id_usuario])
+}
+
+model ConfiguracionPermiso {
+  id       Int     @id @default(autoincrement())
+  id_grupo Int
+  permiso  Permiso
+  abierto  Boolean @default(false)
+
+  grupo    Grupo @relation(fields: [id_grupo], references: [id])
+
+  @@unique([id_grupo, permiso])
 }
 
 model Evento {
@@ -320,4 +333,21 @@ enum MetodoPago {
   TARJETA
   PAYPAL
   OTRO
+}
+
+enum Permiso {
+  editar_grupo
+  eliminar_grupo
+  gestionar_roles
+  ver_estadisticas
+  invitar_miembros
+  expulsar_miembros
+  aprobar_solicitudes
+  crear_publicaciones
+  eliminar_publicaciones
+  fijar_publicaciones
+  crear_ofertas
+  gestionar_ofertas
+  subir_documentos
+  eliminar_documentos
 }
