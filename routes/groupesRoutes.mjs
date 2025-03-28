@@ -33,6 +33,6 @@ router.post('/enviar/:groupId/mensajes', sendMessage);
 router.get('/ver/:groupId/mensajes', seeMessage);
 
 // Cambiar Rol de un Miembro
-router.put('/cambio-rol/:grupoId/miembros/:memberId', changeRole);
+router.put('/cambio-rol/:groupId/miembros/:memberId', changeRole);
 
 export default router;

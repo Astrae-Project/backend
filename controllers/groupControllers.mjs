@@ -649,94 +649,94 @@ export const seeMessage = async (req, res) => {
   }
 };
 
-  export const changeRole = async (req, res) => {
-    try {
-      const token = req.cookies.token;
-  
-      if (!token) {
-        return res.status(401).json({ message: 'Token no proporcionado' });
-      }
-  
-      const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-      const userId = parseInt(decodedToken.userId, 10);
-  
-      if (!userId) {
-        return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
-      }
-  
-      const { groupId, memberId, newRole } = req.body;
-  
-      // Verificar si el grupo existe
-      const grupo = await prisma.grupo.findUnique({
-        where: { id: parseInt(groupId, 10) },
-      });
-  
-      if (!grupo) {
-        return res.status(404).json({ message: 'Grupo no encontrado' });
-      }
-  
-      // Verificar que el usuario que hace la solicitud es un administrador
-      const admin = await prisma.grupoUsuario.findFirst({
-        where: {
-          id_usuario: userId,
-          id_grupo: parseInt(groupId, 10),
-          rol: 'administrador',
-        },
-      });
-  
-      if (!admin) {
-        return res.status(403).json({ message: 'No tienes permisos para cambiar roles en este grupo' });
-      }
-  
-      // Verificar que el miembro al que se quiere cambiar el rol existe en el grupo
-      const miembro = await prisma.grupoUsuario.findFirst({
-        where: {
-          id_usuario: parseInt(memberId, 10),
-          id_grupo: parseInt(groupId, 10),
-        },
-      });
-  
-      if (!miembro) {
-        return res.status(404).json({ message: 'El usuario no es miembro del grupo' });
-      }
-  
-      // Validar el nuevo rol
-      const rolesPermitidos = ['miembro', 'administrador'];
-      if (!rolesPermitidos.includes(newRole)) {
-        return res.status(400).json({ message: 'Rol no válido. Los roles permitidos son "miembro" y "administrador".' });
-      }
-  
-      // Evitar que un administrador se degrade a sí mismo
-      if (userId === parseInt(memberId, 10) && newRole !== 'administrador') {
-        return res.status(400).json({ message: 'No puedes cambiar tu propio rol.' });
-      }
-  
-      // Actualizar el rol del miembro
-      await prisma.grupoUsuario.update({
-        where: {
-          id_grupo_id_usuario: {
-            id_grupo: parseInt(groupId, 10),
-            id_usuario: parseInt(memberId, 10),
-          },
-        },
-        data: {
-          rol: newRole,
-        },
-      });
-  
-      // Crear notificación para el usuario afectado
-      await prisma.notificacion.create({
-        data: {
-          id_usuario: parseInt(memberId, 10),
-          contenido: `Tu rol en el grupo "${grupo.nombre}" ha sido cambiado a "${newRole}".`,
-          tipo: 'grupo',
-        },
-      });
-  
-      return res.status(200).json({ message: `Rol cambiado exitosamente a "${newRole}".` });
-    } catch (error) {
-      console.error('Error al cambiar el rol del usuario:', error);
-      return res.status(500).json({ message: 'Error al cambiar el rol del usuario' });
+export const changeRole = async (req, res) => {
+  try {
+    const token = req.cookies.token;
+
+    if (!token) {
+      return res.status(401).json({ message: 'Token no proporcionado' });
     }
-  };
-  
+
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = parseInt(decodedToken.userId, 10);
+
+    if (!userId) {
+      return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
+    }
+
+    const { groupId, memberId } = req.params;
+    const { newRole } = req.body;
+
+    // Verificar si el grupo existe
+    const grupo = await prisma.grupo.findUnique({
+      where: { id: parseInt(groupId, 10) },
+    });
+
+    if (!grupo) {
+      return res.status(404).json({ message: 'Grupo no encontrado' });
+    }
+
+    // Verificar que el usuario que hace la solicitud es un administrador
+    const admin = await prisma.grupoUsuario.findFirst({
+      where: {
+        id_usuario: userId,
+        id_grupo: parseInt(groupId, 10),
+        rol: 'administrador',
+      },
+    });
+
+    if (!admin) {
+      return res.status(403).json({ message: 'No tienes permisos para cambiar roles en este grupo' });
+    }
+
+    // Verificar que el miembro al que se quiere cambiar el rol existe en el grupo
+    const miembro = await prisma.grupoUsuario.findFirst({
+      where: {
+        id_usuario: parseInt(memberId, 10),
+        id_grupo: parseInt(groupId, 10),
+      },
+    });
+
+    if (!miembro) {
+      return res.status(404).json({ message: 'El usuario no es miembro del grupo' });
+    }
+
+    // Validar el nuevo rol
+    const rolesPermitidos = ["miembro", "administrador"];
+    if (!rolesPermitidos.includes(newRole)) {
+      return res.status(400).json({ message: 'Rol no válido. Los roles permitidos son "miembro" y "administrador".' });
+    }
+
+    // Evitar que un administrador se degrade a sí mismo
+    if (userId === parseInt(memberId, 10) && newRole !== 'administrador') {
+      return res.status(400).json({ message: 'No puedes cambiar tu propio rol.' });
+    }
+
+    // Actualizar el rol del miembro
+    await prisma.grupoUsuario.update({
+      where: {
+        id_grupo_id_usuario: {
+          id_grupo: parseInt(groupId, 10),
+          id_usuario: parseInt(memberId, 10),
+        },
+      },
+      data: {
+        rol: newRole,
+      },
+    });
+
+    // Crear notificación para el usuario afectado
+    await prisma.notificacion.create({
+      data: {
+        id_usuario: parseInt(memberId, 10),
+        contenido: `Tu rol en el grupo "${grupo.nombre}" ha sido cambiado a "${newRole}".`,
+        tipo: 'grupo',
+      },
+    });
+
+    return res.status(200).json({ message: `Rol cambiado exitosamente a "${newRole}".` });
+  } catch (error) {
+    console.error('Error al cambiar el rol del usuario:', error);
+    return res.status(500).json({ message: 'Error al cambiar el rol del usuario' });
+  }
+};
