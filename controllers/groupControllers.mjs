@@ -413,12 +413,12 @@ export const addMember = async (req, res) => {
       return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
     }
 
-    const { groupId, newMemberId } = req.body; // ID del grupo y del nuevo miembro a añadir
+    const { groupId, memberId } = req.params; // ID del grupo y del nuevo miembro a añadir
 
     // Verificar que el grupo existe
     const grupo = await prisma.grupo.findUnique({
       where: {
-        id: groupId,
+        id: parseInt(groupId, 10),
       },
       include: {
         usuarios: true, // Incluye los usuarios actuales para verificar el rol del admin
@@ -433,8 +433,8 @@ export const addMember = async (req, res) => {
     const admin = await prisma.grupoUsuario.findFirst({
       where: {
         id_usuario: userId,
-        id_grupo: groupId,
-        rol: 'administrador', // Verificamos que sea administrador
+        id_grupo: parseInt(groupId, 10),
+        rol: 'administrador',
       },
     });
 
@@ -445,8 +445,8 @@ export const addMember = async (req, res) => {
     // Verificar si el nuevo miembro ya está en el grupo
     const existingMember = await prisma.grupoUsuario.findFirst({
       where: {
-        id_usuario: newMemberId,
-        id_grupo: groupId,
+        id_usuario: parseInt(memberId, 10),
+        id_grupo: parseInt(groupId, 10),
       },
     });
 
@@ -457,23 +457,19 @@ export const addMember = async (req, res) => {
     // Añadir el nuevo miembro al grupo
     const nuevoMiembro = await prisma.grupoUsuario.create({
       data: {
-        id_usuario: newMemberId,
-        id_grupo: groupId,
-        rol: 'miembro', // Añadimos al nuevo miembro con el rol por defecto
+        id_usuario: parseInt(memberId, 10),
+        id_grupo: parseInt(groupId, 10),
+        rol: 'miembro', // Rol por defecto para el nuevo miembro
       },
     });
 
-    const participante = await prisma.grupoUsuario.findUnique({
-      where: { id_usuario: newMemberId },
-    });
-      
-    // Crear notificaciones para los participantes
+    // Crear notificación para el nuevo miembro
     await prisma.notificacion.create({
-      data: participante.map((p) => ({
-        id_usuario: p.newMemberId,
+      data: {
+        id_usuario: nuevoMiembro.id_usuario,
         contenido: `Te has unido al grupo ${grupo.nombre}`,
         tipo: 'grupo',
-      })),
+      },
     });
 
     res.status(201).json({ message: 'Miembro añadido exitosamente', nuevoMiembro });
@@ -482,7 +478,6 @@ export const addMember = async (req, res) => {
     res.status(500).json({ message: 'Error al añadir miembro al grupo' });
   }
 };
-
 
 export const dropMember = async (req, res) => {
   try {
@@ -499,7 +494,7 @@ export const dropMember = async (req, res) => {
       return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
     }
 
-    const { groupId, memberId } = req.body; // Cambié "newMemberId" a "memberId" porque estamos eliminando
+    const { groupId, memberId } = req.params; // Cambié "newMemberId" a "memberId" porque estamos eliminando
 
     // Verificar que el grupo existe
     const grupo = await prisma.grupo.findUnique({

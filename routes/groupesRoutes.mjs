@@ -21,10 +21,10 @@ router.get('/data/:grupoId', dataGroup);
 router.get('/disponible/:grupoId', fueraGrupo);
 
 // Añadir Miembro a un Grupo
-router.post('/añadir/:grupoId/miembro/:usuarioId', addMember);
+router.post('/anadir/:groupId/miembro/:memberId', addMember);
 
 // Quitar Miembro de un Grupo
-router.delete('/eliminar/:grupoId/miembro/:usuarioId', dropMember);
+router.delete('/eliminar/:groupId/miembro/:memberId', dropMember);
 
 // Enviar Mensaje en el Grupo
 router.post('/enviar/:groupId/mensajes', sendMessage);
@@ -33,6 +33,6 @@ router.post('/enviar/:groupId/mensajes', sendMessage);
 router.get('/ver/:groupId/mensajes', seeMessage);
 
 // Cambiar Rol de un Miembro
-router.put('/cambio-rol/:grupoId/miembros/:usuarioId', changeRole);
+router.put('/cambio-rol/:grupoId/miembros/:memberId', changeRole);
 
 export default router;
