@@ -50,11 +50,6 @@ export async function saveContact(req, res) {
         res.status(200).json({ message: 'Contacto actualizado con éxito', data: contactoActualizado });
     } catch (error) {
         console.error('Error al actualizar la información de contacto:', error);
-
-        if (error.name === 'JsonWebTokenError') {
-            return res.status(401).json({ message: 'Token inválido o expirado' });
-        }
-
         res.status(500).json({ message: 'Error interno del servidor' });
     }
 }

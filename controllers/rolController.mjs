@@ -17,7 +17,7 @@ export const selectRole = async (req, res) => {
 
   const userId = decodedToken.userId;
   if (!userId) {
-    return res.status(401).json({ message: 'ID de usuario no encontrado en el token' });
+    return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
   }
 
   const { rol } = req.body;

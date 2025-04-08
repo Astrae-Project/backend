@@ -10,7 +10,7 @@ router.post('/crear', createGroup);
 router.post('/unir/:grupoId', joinGroup);
 
 // Salir de Grupo
-router.delete('/salir/:grupoId', dropGroup);
+router.delete('/salir/:groupId', dropGroup);
 
 // Cambiar Datos del Grupo
 router.put('/datos/:grupoId', changeData);

@@ -97,7 +97,7 @@ export const loginUser = async (req, res) => {
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
-      return res.status(401).json({ message: 'Contraseña incorrecta' });
+      return res.status(403).json({ message: 'Contraseña incorrecta' });
     }
 
     const accessToken = generateAccessToken(user)

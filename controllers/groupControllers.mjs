@@ -145,8 +145,8 @@ export const dropGroup = async (req, res) => {
       return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
     }
 
-    const { grupoId } = req.params;
-    const parsedGroupId = parseInt(grupoId, 10);
+    const { groupId } = req.params;
+    const parsedGroupId = parseInt(groupId, 10);
 
     if (isNaN(parsedGroupId)) {
       return res.status(400).json({ message: 'ID de grupo inválido' });
@@ -156,7 +156,7 @@ export const dropGroup = async (req, res) => {
     const grupo = await prisma.grupo.findUnique({
       where: { id: parsedGroupId },
       include: {
-        miembros: true, // Obtener todos los miembros del grupo
+        usuarios: true, // Obtener todos los miembros del grupo
       },
     });
 
@@ -386,8 +386,8 @@ export const changeData = async (req, res) => {
     await prisma.notificacion.createMany({
       data: miembros.map((m) => ({
         id_usuario: m.id_usuario,
-        contenido: `El grupo "${grupoActual.nombre}" ha cambiado: ${cambios.join(', ')}`,
-        tipo: 'evento',
+        contenido: `El grupo "${grupoActual.nombre}" ha sido modificado: ${cambios.join(', ')}`,
+        tipo: 'grupo',
       })),
     });
 

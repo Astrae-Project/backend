@@ -7,7 +7,7 @@ export const offer = async (req, res) => {
   const { id_startup, monto_ofrecido, porcentaje_ofrecido } = req.body;
 
   if (!token) {
-    return res.status(402).json({ message: 'Token no proporcionado' });
+    return res.status(401).json({ message: 'Token no proporcionado' });
   }
 
   const decodedToken = jwt.verify(token, process.env.JWT_SECRET);

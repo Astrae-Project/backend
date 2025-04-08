@@ -6,7 +6,7 @@ export async function datosUsuario (req, res) {
     const token = req.cookies.token;
 
     if (!token) {
-        return res.status(402).json({ message: 'Token no proporcionado' });
+        return res.status(401).json({ message: 'Token no proporcionado' });
     }
 
     try {
@@ -142,7 +142,7 @@ export async function datosUsuario (req, res) {
                 recaudacionTotal,
             });
         } else {
-            return res.status(401).json({ message: 'Rol no válido' });
+            return res.status(403).json({ message: 'Rol no válido' });
         }
 
     } catch (error) {
@@ -705,7 +705,7 @@ export async function startupsSeguidas(req, res) {
     try {
       const token = req.cookies.token;
       if (!token) {
-        return res.status(402).json({ message: 'Token no proporcionado' });
+        return res.status(401).json({ message: 'Token no proporcionado' });
       }
   
       const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
@@ -761,7 +761,7 @@ export async function datosPortfolio(req, res) {
     const token = req.cookies.token;
 
     if (!token) {
-        return res.status(403).json({ message: 'Token no proporcionado' });
+        return res.status(401).json({ message: 'Token no proporcionado' });
     }
 
     try {
@@ -841,7 +841,7 @@ export async function gruposUsuario(req, res) {
     const token = req.cookies.token;
 
     if (!token) {
-        return res.status(402).json({ message: 'Token no proporcionado' });
+        return res.status(401).json({ message: 'Token no proporcionado' });
     }
 
     try {
@@ -875,7 +875,7 @@ export async function todosGrupos (req, res) {
     const token = req.cookies.token;
 
     if (!token) {
-        return res.status(402).json({ message: 'Token no proporcionado' });
+        return res.status(401).json({ message: 'Token no proporcionado' });
     }
 
     try {
@@ -908,7 +908,7 @@ export async function movimientosRecientes(req, res) {
     const token = req.cookies.token;
 
     if (!token) {
-        return res.status(402).json({ message: 'Token no proporcionado' });
+        return res.status(401).json({ message: 'Token no proporcionado' });
     }
 
     try {
@@ -1088,7 +1088,7 @@ export async function movimientosSeguidos(req, res) {
     const token = req.cookies.token;
 
     if (!token) {
-        return res.status(402).json({ message: 'Token no proporcionado' });
+        return res.status(401).json({ message: 'Token no proporcionado' });
     }
 
     try {
@@ -1359,7 +1359,7 @@ export async function movimientosSinEventos(req, res) {
     const token = req.cookies.token;
 
     if (!token) {
-        return res.status(402).json({ message: 'Token no proporcionado' });
+        return res.status(401).json({ message: 'Token no proporcionado' });
     }
 
     try {
@@ -1462,7 +1462,7 @@ export async function movimientosInversionStartups(req, res) {
     const token = req.cookies.token;
 
     if (!token) {
-        return res.status(402).json({ message: 'Token no proporcionado' });
+        return res.status(401).json({ message: 'Token no proporcionado' });
     }
 
     try {
@@ -1535,7 +1535,7 @@ export async function obtenerContacto(req, res) {
     const token = req.cookies.token;
 
     if (!token) {
-        return res.status(402).json({ message: 'Token no proporcionado' });
+        return res.status(401).json({ message: 'Token no proporcionado' });
     }
 
     try {
@@ -1564,7 +1564,7 @@ export async function obtenerContacto(req, res) {
 
 export async function obtenerOferta(req, res) {
     try {
-        const token = req.cookies?.token;
+        const token = req.cookies.token;
 
         if (!token) {
             return res.status(401).json({ message: "No autorizado. Token no proporcionado." });
@@ -1765,7 +1765,7 @@ export async function obtenerHistoricos(req, res) {
                 historico: startup.valoracion_historica,
             });
         } else {
-            return res.status(401).json({ message: 'Rol no válido' });
+            return res.status(403).json({ message: 'Rol no válido' });
         }
 
     } catch (error) {
