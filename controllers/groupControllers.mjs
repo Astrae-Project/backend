@@ -609,7 +609,7 @@ export const sendMessage = async (req, res) => {
 
     res.status(201).json({ message: 'Mensaje enviado con éxito', mensaje });
   } catch (error) {
-    console.error("❌ Error al enviar mensaje:", error);
+    console.error("Error al enviar mensaje:", error);
     res.status(500).json({ message: 'Error al enviar mensaje', error: error.message });
   }
 };
