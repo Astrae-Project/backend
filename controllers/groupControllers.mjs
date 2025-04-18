@@ -30,6 +30,13 @@ export const createGroup = async (req, res) => {
             id_usuario: userId,   // Agregar el usuario creador con rol de administrador
             rol: 'administrador'  // Asignar al creador como administrador del grupo
           }
+        },
+        permisos: {
+          create: [
+            { permiso: 'invitar_miembros', abierto: false },
+            { permiso: 'crear_ofertas', abierto: false },
+            { permiso: 'subir_documentos', abierto: false },
+          ]
         }
       }
     });

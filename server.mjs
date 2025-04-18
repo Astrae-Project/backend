@@ -2,7 +2,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import authRoutes from './routes/auth.mjs';
+import authRoutes from './routes/authRoutes.mjs';
 import investRoutes from './routes/investRoutes.mjs';
 import searchingRoutes from './routes/searchingRoutes.mjs';
 import fetchingRoutes from './routes/fetchingRoutes.mjs';

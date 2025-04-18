@@ -1,7 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { createSession } from '../lib/sessionHandler.mjs';
 import { generateAccessToken } from '../lib/accessToken.mjs';
 
 const prisma = new PrismaClient();
@@ -156,7 +155,7 @@ export const tokenController = async (req, res, next) => {
 
   try {
     if (!refreshToken) {
-      return res.status(403).json({ message: "No refresh token provided" });
+      return res.status(403).json({ message: "No hay token de refresco" });
     }
 
     // Verifica y decodifica el refresh token
@@ -164,7 +163,7 @@ export const tokenController = async (req, res, next) => {
       jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET, (err, decoded) => {
         if (err) {
           console.error("Error al verificar el refresh token:", err);
-          return reject(new Error("Failed to authenticate token"));
+          return reject(new Error("No se pudo verificar el refresh token"));
         }
         resolve(decoded);
       });
@@ -177,7 +176,7 @@ export const tokenController = async (req, res, next) => {
     const user = await prisma.usuario.findUnique({ where: { id: userId } });
 
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
     // Generar un nuevo access token usando los datos del usuario
@@ -192,7 +191,7 @@ export const tokenController = async (req, res, next) => {
       path: '/',
     });
 
-    return res.status(200).json({ message: "Token refreshed successfully", accessToken });
+    return res.status(200).json({ message: "Token refrescado", accessToken });
   } catch (error) {
     console.error("Error en el tokenController:", error);
     next(error);

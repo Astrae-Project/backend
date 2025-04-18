@@ -234,7 +234,6 @@ model ConfiguracionPermiso {
 model Evento {
   id              Int            @id @default(autoincrement())
   id_usuario      Int
-  id_grupo        Int
   descripcion     String         @db.VarChar(255)
   fecha_evento    DateTime       @default(now())
   tipo_movimiento TipoMovimiento @default(evento)
