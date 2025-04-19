@@ -495,13 +495,14 @@ export const dropMember = async (req, res) => {
     }
 
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+
     const userId = parseInt(decodedToken.userId, 10);
 
     if (!userId) {
       return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
     }
 
-    const { groupId, memberId } = req.params; // Cambié "newMemberId" a "memberId" porque estamos eliminando
+    const { groupId, memberId } = req.params;
 
     // Verificar que el grupo existe
     const grupo = await prisma.grupo.findUnique({
@@ -540,7 +541,7 @@ export const dropMember = async (req, res) => {
     }
 
     // Expulsar al miembro del grupo
-    await prisma.grupoUsuario.delete({
+    const deleted = await prisma.grupoUsuario.delete({
       where: {
         id_grupo_id_usuario: {
           id_grupo: parseInt(groupId, 10),
@@ -550,7 +551,7 @@ export const dropMember = async (req, res) => {
     });
 
     // Crear notificación para el miembro expulsado
-    await prisma.notificacion.create({
+    const notificacion = await prisma.notificacion.create({
       data: {
         id_usuario: parseInt(memberId, 10),
         contenido: `Has sido expulsado del grupo "${grupo.nombre}".`,
