@@ -1,5 +1,5 @@
 import express from 'express';
-import { darPuntuacion, marcarComoLeido, saveContact } from '../controllers/profileControllers.mjs';
+import { darPuntuacion, marcarComoLeido, saveContact, changeData } from '../controllers/profileControllers.mjs';
 
 const router = express.Router();
 
@@ -9,5 +9,7 @@ router.put('/cambiar-datos', saveContact );
 router.post('/resena', darPuntuacion );
 
 router.put('/leido', marcarComoLeido );
+
+router.put('/editar-perfil', changeData );
 
 export default router;

@@ -54,6 +54,147 @@ export async function saveContact(req, res) {
     }
 }
 
+export const changeData = async (req, res) => {
+  try {
+    const token = req.cookies.token;
+
+    if (!token) {
+      return res.status(401).json({ message: 'Token no proporcionado' });
+    }
+
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = parseInt(decodedToken.userId, 10);
+
+    if (!userId) {
+      return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
+    }
+
+    const {
+      nombre,
+      username,
+      avatar,
+      ciudad,
+      pais,
+      perfil_inversion,
+      sector,
+      estado_financiacion,
+      plantilla,
+      porcentaje_disponible,
+    } = req.body;
+
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: userId },
+      include: {
+        inversores: true,
+        startups: true,
+      },
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    const cambios = [];
+
+    // Actualizar datos comunes
+    const dataUsuario = {};
+    if (username && username !== usuario.username) {
+      dataUsuario.username = username;
+      cambios.push(`Username: "${usuario.username}" → "${username}"`);
+    }
+    if (avatar && avatar !== usuario.avatar) {
+      dataUsuario.avatar = avatar;
+      cambios.push('Avatar actualizado');
+    }
+
+    // Actualizar datos del perfil (Inversor o Startup)
+    if (usuario.inversor) {
+      const dataInversor = {};
+      if (nombre && nombre !== usuario.inversor.nombre) {
+        dataInversor.nombre = nombre;
+        cambios.push(`Nombre: "${usuario.inversor.nombre}" → "${nombre}"`);
+      }
+      if (ciudad && ciudad !== usuario.inversor.ciudad) {
+        dataInversor.ciudad = ciudad;
+        cambios.push(`Ciudad: "${usuario.inversor.ciudad}" → "${ciudad}"`);
+      }
+      if (pais && pais !== usuario.inversor.pais) {
+        dataInversor.pais = pais;
+        cambios.push(`País: "${usuario.inversor.pais}" → "${pais}"`);
+      }
+      if (perfil_inversion && perfil_inversion !== usuario.inversor.perfil_inversion) {
+        dataInversor.perfil_inversion = perfil_inversion;
+        cambios.push('Perfil de inversión actualizado');
+      }
+
+      if (Object.keys(dataInversor).length > 0) {
+        await prisma.inversor.update({
+          where: { id_usuario: userId },
+          data: dataInversor,
+        });
+      }
+    }
+
+    if (usuario.startup) {
+      const dataStartup = {};
+      if (nombre && nombre !== usuario.startup.nombre) {
+        dataStartup.nombre = nombre;
+        cambios.push(`Nombre: "${usuario.startup.nombre}" → "${nombre}"`);
+      }
+      if (ciudad && ciudad !== usuario.startup.ciudad) {
+        dataStartup.ciudad = ciudad;
+        cambios.push(`Ciudad: "${usuario.startup.ciudad}" → "${ciudad}"`);
+      }
+      if (pais && pais !== usuario.startup.pais) {
+        dataStartup.pais = pais;
+        cambios.push(`País: "${usuario.startup.pais}" → "${pais}"`);
+      }
+      if (sector && sector !== usuario.startup.sector) {
+        dataStartup.sector = sector;
+        cambios.push(`Sector: "${usuario.startup.sector}" → "${sector}"`);
+      }
+      if (estado_financiacion && estado_financiacion !== usuario.startup.estado_financiacion) {
+        dataStartup.estado_financiacion = estado_financiacion;
+        cambios.push('Estado de financiación actualizado');
+      }
+      if (plantilla && plantilla !== usuario.startup.plantilla) {
+        dataStartup.plantilla = plantilla;
+        cambios.push('Plantilla actualizada');
+      }
+      if (
+        porcentaje_disponible &&
+        porcentaje_disponible !== usuario.startup.porcentaje_disponible
+      ) {
+        dataStartup.porcentaje_disponible = porcentaje_disponible;
+        cambios.push('Porcentaje disponible actualizado');
+      }
+
+      if (Object.keys(dataStartup).length > 0) {
+        await prisma.startup.update({
+          where: { id_usuario: userId },
+          data: dataStartup,
+        });
+      }
+    }
+
+    if (Object.keys(dataUsuario).length > 0) {
+      await prisma.usuario.update({
+        where: { id: userId },
+        data: dataUsuario,
+      });
+    }
+
+    if (cambios.length === 0) {
+      return res.status(200).json({ message: 'No se realizaron cambios en el perfil' });
+    }
+
+    return res.status(200).json({ message: 'Perfil actualizado correctamente', cambios });
+  } catch (error) {
+    console.error('Error al actualizar el perfil:', error);
+    return res.status(500).json({ message: 'Error al actualizar el perfil' });
+  }
+};
+
 export async function darPuntuacion(req, res) {
     const { id_inversor, id_startup, puntuacion, comentario } = req.body;
     const token = req.cookies.token;
