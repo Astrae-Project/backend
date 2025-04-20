@@ -56,16 +56,22 @@ export async function saveContact(req, res) {
 
 export const changeData = async (req, res) => {
   try {
+    console.log('[1] Inicio de changeData');
+
     const token = req.cookies.token;
+    console.log('[2] Token recibido:', token);
 
     if (!token) {
+      console.warn('[2.1] Token no proporcionado');
       return res.status(401).json({ message: 'Token no proporcionado' });
     }
 
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
     const userId = parseInt(decodedToken.userId, 10);
+    console.log('[3] Token decodificado. ID de usuario:', userId);
 
     if (!userId) {
+      console.warn('[3.1] ID de usuario no encontrado en el token');
       return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
     }
 
@@ -82,6 +88,8 @@ export const changeData = async (req, res) => {
       porcentaje_disponible,
     } = req.body;
 
+    console.log('[4] Datos recibidos del body:', req.body);
+
     const usuario = await prisma.usuario.findUnique({
       where: { id: userId },
       include: {
@@ -90,13 +98,15 @@ export const changeData = async (req, res) => {
       },
     });
 
+    console.log('[5] Usuario encontrado:', usuario);
+
     if (!usuario) {
+      console.warn('[5.1] Usuario no encontrado en la base de datos');
       return res.status(404).json({ message: 'Usuario no encontrado' });
     }
 
     const cambios = [];
 
-    // Actualizar datos comunes
     const dataUsuario = {};
     if (username && username !== usuario.username) {
       dataUsuario.username = username;
@@ -106,28 +116,32 @@ export const changeData = async (req, res) => {
       dataUsuario.avatar = avatar;
       cambios.push('Avatar actualizado');
     }
+    if (ciudad && ciudad !== usuario.ciudad) {
+      dataUsuario.ciudad = ciudad;
+      cambios.push(`Ciudad: "${usuario.ciudad}" → "${ciudad}"`);
+    }
+    if (pais && pais !== usuario.pais) {
+      dataUsuario.pais = pais;
+      cambios.push(`País: "${usuario.pais}" → "${pais}"`);
+    }
 
-    // Actualizar datos del perfil (Inversor o Startup)
-    if (usuario.inversor) {
+    // Inversor
+    const inversor = usuario.inversores?.[0]; // en plural
+    console.log('[6] Inversor detectado:', inversor);
+
+    if (inversor) {
       const dataInversor = {};
-      if (nombre && nombre !== usuario.inversor.nombre) {
+      if (nombre && nombre !== inversor.nombre) {
         dataInversor.nombre = nombre;
-        cambios.push(`Nombre: "${usuario.inversor.nombre}" → "${nombre}"`);
+        cambios.push(`Nombre: "${inversor.nombre}" → "${nombre}"`);
       }
-      if (ciudad && ciudad !== usuario.inversor.ciudad) {
-        dataInversor.ciudad = ciudad;
-        cambios.push(`Ciudad: "${usuario.inversor.ciudad}" → "${ciudad}"`);
-      }
-      if (pais && pais !== usuario.inversor.pais) {
-        dataInversor.pais = pais;
-        cambios.push(`País: "${usuario.inversor.pais}" → "${pais}"`);
-      }
-      if (perfil_inversion && perfil_inversion !== usuario.inversor.perfil_inversion) {
+      if (perfil_inversion && perfil_inversion !== inversor.perfil_inversion) {
         dataInversor.perfil_inversion = perfil_inversion;
         cambios.push('Perfil de inversión actualizado');
       }
 
       if (Object.keys(dataInversor).length > 0) {
+        console.log('[6.1] Actualizando datos de inversor:', dataInversor);
         await prisma.inversor.update({
           where: { id_usuario: userId },
           data: dataInversor,
@@ -135,41 +149,38 @@ export const changeData = async (req, res) => {
       }
     }
 
-    if (usuario.startup) {
+    // Startup
+    const startup = usuario.startups?.[0]; // en plural
+    console.log('[7] Startup detectada:', startup);
+
+    if (startup) {
       const dataStartup = {};
-      if (nombre && nombre !== usuario.startup.nombre) {
+      if (nombre && nombre !== startup.nombre) {
         dataStartup.nombre = nombre;
-        cambios.push(`Nombre: "${usuario.startup.nombre}" → "${nombre}"`);
+        cambios.push(`Nombre: "${startup.nombre}" → "${nombre}"`);
       }
-      if (ciudad && ciudad !== usuario.startup.ciudad) {
-        dataStartup.ciudad = ciudad;
-        cambios.push(`Ciudad: "${usuario.startup.ciudad}" → "${ciudad}"`);
-      }
-      if (pais && pais !== usuario.startup.pais) {
-        dataStartup.pais = pais;
-        cambios.push(`País: "${usuario.startup.pais}" → "${pais}"`);
-      }
-      if (sector && sector !== usuario.startup.sector) {
+      if (sector && sector !== startup.sector) {
         dataStartup.sector = sector;
-        cambios.push(`Sector: "${usuario.startup.sector}" → "${sector}"`);
+        cambios.push(`Sector: "${startup.sector}" → "${sector}"`);
       }
-      if (estado_financiacion && estado_financiacion !== usuario.startup.estado_financiacion) {
+      if (estado_financiacion && estado_financiacion !== startup.estado_financiacion) {
         dataStartup.estado_financiacion = estado_financiacion;
         cambios.push('Estado de financiación actualizado');
       }
-      if (plantilla && plantilla !== usuario.startup.plantilla) {
+      if (plantilla && plantilla !== startup.plantilla) {
         dataStartup.plantilla = plantilla;
         cambios.push('Plantilla actualizada');
       }
       if (
         porcentaje_disponible &&
-        porcentaje_disponible !== usuario.startup.porcentaje_disponible
+        porcentaje_disponible !== startup.porcentaje_disponible
       ) {
         dataStartup.porcentaje_disponible = porcentaje_disponible;
         cambios.push('Porcentaje disponible actualizado');
       }
 
       if (Object.keys(dataStartup).length > 0) {
+        console.log('[7.1] Actualizando datos de startup:', dataStartup);
         await prisma.startup.update({
           where: { id_usuario: userId },
           data: dataStartup,
@@ -177,7 +188,9 @@ export const changeData = async (req, res) => {
       }
     }
 
+    // Usuario
     if (Object.keys(dataUsuario).length > 0) {
+      console.log('[8] Actualizando datos de usuario:', dataUsuario);
       await prisma.usuario.update({
         where: { id: userId },
         data: dataUsuario,
@@ -185,12 +198,15 @@ export const changeData = async (req, res) => {
     }
 
     if (cambios.length === 0) {
+      console.log('[9] No se realizaron cambios en el perfil');
       return res.status(200).json({ message: 'No se realizaron cambios en el perfil' });
     }
 
+    console.log('[10] Cambios realizados:', cambios);
     return res.status(200).json({ message: 'Perfil actualizado correctamente', cambios });
+
   } catch (error) {
-    console.error('Error al actualizar el perfil:', error);
+    console.error('[ERROR] Error al actualizar el perfil:', error);
     return res.status(500).json({ message: 'Error al actualizar el perfil' });
   }
 };

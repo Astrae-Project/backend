@@ -117,6 +117,9 @@ export async function datosUsuario (req, res) {
                             username: true,
                             fecha_creacion: true,
                             id: true,
+                            avatar: true,
+                            pais: true,
+                            ciudad: true,
                         },
                     },
                     inversiones: {
@@ -871,7 +874,7 @@ export async function gruposUsuario(req, res) {
     }
 }
 
-export async function todosGrupos (req, res) {
+export async function todosGrupos(req, res) {
     const token = req.cookies.token;
 
     if (!token) {
@@ -886,21 +889,28 @@ export async function todosGrupos (req, res) {
             return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
         }
 
-        // Recuperar los grupos a los que pertenece el usuario
+        // Grupos donde el usuario NO está
         const grupos = await prisma.grupo.findMany({
+            where: {
+                usuarios: {
+                    none: {
+                        id_usuario: userId,
+                    },
+                },
+            },
             include: {
                 usuarios: true,
             },
         });
 
         if (!grupos.length) {
-            return res.status(404).json({ error: 'No se encontraron grupos para este usuario' });
+            return res.status(404).json({ error: 'No hay grupos disponibles para unirse' });
         }
 
         res.json(grupos);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: 'Error al recuperar datos de grupos del usuario' });
+        res.status(500).json({ error: 'Error al recuperar grupos disponibles' });
     }
 }
 
@@ -1579,83 +1589,85 @@ export async function obtenerContacto(req, res) {
 }
 
 export async function obtenerOferta(req, res) {
-    try {
-        const token = req.cookies.token;
+  try {
+    const token = req.cookies.token;
 
-        if (!token) {
-            return res.status(401).json({ message: "No autorizado. Token no proporcionado." });
-        }
-
-        // Decodificar token
-        const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-        const userId = decodedToken?.userId;
-        const userRole = decodedToken?.role; // Asegúrate de que el token incluye el rol
-
-        if (!userId || typeof userId !== "number") {
-            return res.status(400).json({ message: "ID de usuario no válido." });
-        }
-
-        let ofertas;
-
-        if (userRole === "startup") {
-            // Buscar ofertas recibidas por sus startups
-            ofertas = await prisma.oferta.findMany({
-                where: {
-                    startup: {
-                        id_usuario: userId, // Solo startups del usuario
-                    },
-                    estado: "pendiente",
-                },
-                include: {
-                    inversor: {
-                        include: {
-                            usuario: true,
-                        },
-                    },
-                    startup: {
-                        include: {
-                            usuario: true,
-                        },
-                    },
-                    escrow: true,
-                },
-            });
-        } else if (userRole === "inversor") {
-            // Buscar ofertas hechas por el inversor
-            ofertas = await prisma.oferta.findMany({
-                where: {
-                    id_inversor: userId, // Ofertas hechas por este inversor
-                },
-                include: {
-                    inversor: {
-                        include: {
-                            usuario: true,
-                        },
-                    },
-                    startup: {
-                        include: {
-                            usuario: true,
-                        },
-                    },
-                    escrow: true,
-                },
-                orderBy: {
-                    fecha_creacion: 'desc', // Ordenar de más nueva a más vieja
-                },
-            });
-        } else {
-            return res.status(403).json({ message: "Acceso denegado. Rol no válido." });
-        }
-
-        if (!ofertas || ofertas.length === 0) {
-            return res.status(404).json({ message: "No se encontraron ofertas." });
-        }
-
-        return res.json(ofertas);
-    } catch (error) {
-        console.error("Error al obtener ofertas:", error.message);
-        return res.status(500).json({ error: "Error interno del servidor." });
+    if (!token) {
+      return res.status(401).json({ message: "No autorizado. Token no proporcionado." });
     }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = parseInt(decoded.userId, 10);
+    const userRole = decoded.role;
+
+
+    if (isNaN(userId)) {
+      console.error("El ID del usuario no es válido:", userId);
+      return res.status(400).json({ message: "ID de usuario no válido." });
+    }
+
+    let ofertas;
+
+    if (userRole === "startup") {
+
+      const startup = await prisma.startup.findUnique({
+        where: { id_usuario: userId },
+      });
+
+      if (!startup) {
+        return res.status(404).json({ message: "Startup no encontrada para este usuario." });
+      }
+
+
+      ofertas = await prisma.oferta.findMany({
+        where: {
+          id_startup: startup.id,
+          estado: "Pendiente",
+        },
+        include: {
+          inversor: { include: { usuario: true } },
+          startup: { include: { usuario: true } },
+          escrow: true,
+        },
+      });
+
+    }
+    else if (userRole === "inversor") {
+
+      const inversor = await prisma.inversor.findUnique({
+        where: { id_usuario: userId },
+      });
+
+      if (!inversor) {
+        return res.status(404).json({ message: "Inversor no encontrado para este usuario." });
+      }
+
+
+      ofertas = await prisma.oferta.findMany({
+        where: { id_inversor: inversor.id },
+        include: {
+          inversor: { include: { usuario: true } },
+          startup: { include: { usuario: true } },
+          escrow: true,
+        },
+        orderBy: { fecha_creacion: 'desc' },
+      });
+
+    }
+    else {
+      return res.status(403).json({ message: "Acceso denegado. Rol no válido." });
+    }
+
+    if (!ofertas || ofertas.length === 0) {
+      return res.status(404).json({ message: "No se encontraron ofertas." });
+    }
+
+    return res.json(ofertas);
+  }
+  catch (error) {
+    console.error("Error al obtener ofertas:", error);
+    return res.status(500).json({ error: "Error interno del servidor." });
+  }
 }
 
 export async function obtenerEventos(req, res) {
