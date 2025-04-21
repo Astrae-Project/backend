@@ -125,169 +125,140 @@ const getPorcentajeDisponible = async (startupId) => {
 };
 
 export const offerAccepted = async (req, res) => {
-  const ofertaId = parseInt(req.params.id_oferta, 10);
-  const userId = parseInt(req.params.id_usuario, 10);
+  const ofertaId = Number(req.params.id_oferta);
+  const userId   = Number(req.params.id_usuario);
 
-  // Verificar que el usuario esté autenticado
   if (!userId) {
     return res.status(401).json({ message: 'Usuario no autenticado' });
   }
 
   try {
-    // Obtener la oferta y verificar su existencia
+    // 1) Obtener oferta + startup + escrow
     const oferta = await prisma.oferta.findUnique({
       where: { id: ofertaId },
       include: { startup: true, escrow: true },
     });
-
     if (!oferta) {
       return res.status(404).json({ message: 'Oferta no encontrada' });
     }
-
-    // Verificar que el usuario tenga permisos sobre la startup
     if (oferta.startup.id_usuario !== userId) {
-      return res.status(403).json({ message: 'No tienes permiso para aceptar esta oferta' });
+      return res.status(403).json({ message: 'Sin permisos para aceptar esta oferta' });
     }
 
-    // Verificar que el porcentaje ofrecido esté disponible
-    const porcentajeDisponible = await getPorcentajeDisponible(oferta.id_startup);
-    const porcentajeOfrecido = parseFloat(oferta.porcentaje_ofrecido);
-
-    if (porcentajeOfrecido > porcentajeDisponible) {
-      return res.status(400).json({ message: 'El porcentaje ofrecido es mayor que el porcentaje disponible' });
+    // 2) Validar porcentaje
+    const pctDisp = await getPorcentajeDisponible(oferta.id_startup);
+    const pctOff  = Number(oferta.porcentaje_ofrecido);
+    if (isNaN(pctOff) || pctOff <= 0) {
+      return res.status(400).json({ message: 'Porcentaje inválido en la oferta' });
+    }
+    if (pctOff > pctDisp) {
+      return res.status(400).json({ message: 'Porcentaje ofrecido > disponible' });
     }
 
-    // Verificar que la oferta no haya sido aceptada o rechazada previamente
-    if (oferta.estado === 'Aceptada' || oferta.estado === 'Rechazada') {
-      return res.status(400).json({ message: 'Esta oferta ya ha sido aceptada o rechazada' });
+    // 3) Verificar estado
+    if (['Aceptada','Rechazada'].includes(oferta.estado)) {
+      return res.status(400).json({ message: 'Esta oferta ya fue procesada' });
     }
 
-    let nuevaInversion;
+    let inversionRecord;
 
-    // Ejecutar la transacción principal
-    await prisma.$transaction(async (prisma) => {
-      // Actualizar el estado de la oferta
-      await prisma.oferta.update({
+    // 4) Transacción: actualizar oferta, escrow, merge inversión y decrementar %
+    await prisma.$transaction(async (trx) => {
+      await trx.oferta.update({
         where: { id: ofertaId },
         data: { estado: 'Aceptada' },
       });
-
-      // Actualizar el estado del escrow
-      await prisma.escrow.update({
+      await trx.escrow.update({
         where: { id: oferta.escrow_id },
         data: { estado: 'Aceptado' },
       });
 
-      // Crear una nueva inversión
-      nuevaInversion = await prisma.inversion.create({
-        data: {
-          id_inversor: oferta.id_inversor,
-          id_startup: oferta.id_startup,
-          monto_invertido: oferta.monto_ofrecido,
-          porcentaje_adquirido: oferta.porcentaje_ofrecido,
-          valor: 0, // Inicialmente 0, se actualizará después
-        },
+      const existing = await trx.inversion.findUnique({
+        where: {
+          inversor_startup_unique: {
+            id_inversor: oferta.id_inversor,
+            id_startup: oferta.id_startup
+          }
+        }
       });
 
-      // Asociar la inversión al portfolio del inversor
-      await prisma.portfolio.update({
-        where: { id_inversor: oferta.id_inversor },
-        data: {
-          inversiones: {
-            connect: { id: nuevaInversion.id },
-          },
-        },
-      });
+      const montoOff = Number(oferta.monto_ofrecido);
 
-      // Actualizar el porcentaje disponible de la startup
-      await prisma.startup.update({
+      if (existing) {
+        inversionRecord = await trx.inversion.update({
+          where: { id: existing.id },
+          data: {
+            monto_invertido: { increment: montoOff },
+            porcentaje_adquirido: { increment: pctOff },
+            fecha: new Date()
+          }
+        });
+      } else {
+        inversionRecord = await trx.inversion.create({
+          data: {
+            id_inversor: oferta.id_inversor,
+            id_startup: oferta.id_startup,
+            monto_invertido: montoOff,
+            porcentaje_adquirido: pctOff,
+            valor: 0
+          }
+        });
+        await trx.portfolio.update({
+          where: { id_inversor: oferta.id_inversor },
+          data: {
+            inversiones: { connect: { id: inversionRecord.id } }
+          }
+        });
+      }
+
+      await trx.startup.update({
         where: { id: oferta.id_startup },
-        data: {
-          porcentaje_disponible: {
-            decrement: oferta.porcentaje_ofrecido,
-          },
-        },
+        data: { porcentaje_disponible: { decrement: pctOff } }
       });
     });
 
-    // Calcular la valoración de la startup
+    // 5) Recalcular valoraciones e inversiones
     const valoracion = await calcularValoracion(oferta.id_startup);
-
-    // Verificar que la valoración sea válida
-    if (valoracion == null || valoracion === undefined) {
-      return res.status(400).json({ message: 'Valoración no disponible para la startup' });
-    }
-
-    // Calcular el valor de la inversión basado en la valoración de la startup
-    const valor = valoracion * (oferta.porcentaje_ofrecido / 100);
-
-    // Actualizar el valor de la inversión
-    await prisma.inversion.update({
-      where: { id: nuevaInversion.id },
-      data: { valor: valor },
-    });
-
-    // Actualizar todas las inversiones relacionadas con la startup
     await actualizarValoresInversiones(oferta.id_startup, valoracion);
 
-    // Registrar la valoración histórica de la startup
+    // 6) Notificar historial de valoraciones
     await prisma.valoracionHistorica.create({
       data: {
-        valoracion: valoracion, // Asegúrate de que esto es un valor numérico o decimal válido
-        fecha: new Date(),
-        startup: {
-          connect: { id: oferta.id_startup },
-        },
-      },
+        startup: { connect: { id: oferta.id_startup } },
+        valoracion,
+        fecha: new Date()
+      }
     });
 
-    // Calcular y registrar el valor total del portfolio del inversor
+    // 7) Actualizar portfolio histórico
     const valorPortfolio = await calcularValorTotalPortfolio(oferta.id_inversor);
     await prisma.portfolioHistorico.create({
       data: {
         inversorId: oferta.id_inversor,
         valoracion: valorPortfolio,
-        fecha: new Date(),
-      },
+        fecha: new Date()
+      }
     });
 
-    // Verificar que el usuario inversor exista
-    const inversor = await prisma.inversor.findUnique({
-      where: { id: oferta.id_inversor },
-    });
-
-    if (!inversor) {
-      return res.status(404).json({ message: 'Usuario inversor no encontrado' });
+    // 8) Notificación al inversor
+    const inversor = await prisma.inversor.findUnique({ where: { id: oferta.id_inversor } });
+    if (inversor) {
+      const montoFmt = Number(oferta.monto_ofrecido)
+        .toLocaleString('es-ES', { maximumFractionDigits: 0 }) + '€';
+      await prisma.notificacion.create({
+        data: {
+          id_usuario: inversor.id_usuario,
+          contenido: `Tu oferta de ${montoFmt} por el ${pctOff}% ha sido aceptada.`,
+          tipo: 'inversion'
+        }
+      });
     }
 
-    const formatMonto = (monto) => {
-      if (monto >= 1e6) {
-        const millones = monto / 1e6;
-        // Si es entero, sin decimales; si no, con 1 decimal.
-        return `${millones % 1 === 0 ? millones.toFixed(0) : millones.toFixed(1)}M`;
-      } else if (monto >= 1e3) {
-        const miles = monto / 1e3;
-        return `${miles % 1 === 0 ? miles.toFixed(0) : miles.toFixed(1)}K`;
-      } else {
-        return monto.toString();
-      }
-    };
+    return res.json({ message: 'Oferta aceptada y portfolio actualizado' });
 
-    const montoFormateado = formatMonto(oferta.monto_ofrecido) + "€";
-
-    // Crear la notificación para el inversor
-    await prisma.notificacion.create({
-      data: {
-        id_usuario: inversor.id_usuario,
-        contenido: `Tu oferta de ${montoFormateado} por el ${oferta.porcentaje_ofrecido}% ha sido aceptada.`,
-        tipo: 'inversion',
-      },
-    });
-
-    res.status(200).json({ message: 'Oferta aceptada y guardada en el portfolio con éxito' });
   } catch (err) {
-    console.error('Error al aceptar la oferta:', err);
-    res.status(500).json({ message: 'Error al aceptar la oferta' });
+    console.error('offerAccepted error:', err);
+    return res.status(500).json({ message: 'Error interno al aceptar oferta' });
   }
 };
 
@@ -458,149 +429,135 @@ export const counteroffer = async (req, res) => {
 };
 
 export const acceptCounteroffer = async (req, res) => {
-  const ofertaId = parseInt(req.params.id_oferta, 10); // ID de la oferta
-  const userId = parseInt(req.params.id_usuario, 10);    // ID del usuario
+  const ofertaId = Number(req.params.id_oferta);
+  const userId   = Number(req.params.id_usuario);
 
   if (!userId) {
     return res.status(401).json({ message: 'Usuario no autenticado' });
   }
 
   try {
+    // 1) Obtener oferta
     const oferta = await prisma.oferta.findUnique({
       where: { id: ofertaId },
-      include: { inversor: true, startup: true }, // Incluir inversor y startup
+      include: { inversor: true, startup: true }
     });
-
     if (!oferta) {
       return res.status(404).json({ message: 'Oferta no encontrada' });
     }
-
-    // Verificar que el usuario que acepta la contraoferta sea el inversor
     if (oferta.inversor.id_usuario !== userId) {
-      return res.status(403).json({ message: 'No tienes permiso para aceptar esta contraoferta' });
+      return res.status(403).json({ message: 'Sin permisos para aceptar esta contraoferta' });
+    }
+    if (['Aceptada','Rechazada'].includes(oferta.estado)) {
+      return res.status(400).json({ message: 'Esta contraoferta ya fue procesada' });
     }
 
-    // Verificar que la contraoferta aún no haya sido aceptada o rechazada
-    if (oferta.estado === 'aceptada' || oferta.estado === 'rechazada') {
-      return res.status(400).json({ message: 'Esta contraoferta ya ha sido aceptada o rechazada' });
+    // 2) Validar porcentaje
+    const pctDisp = await getPorcentajeDisponible(oferta.id_startup);
+    const pctContra = Number(oferta.contraoferta_porcentaje);
+    if (isNaN(pctContra) || pctContra <= 0) {
+      return res.status(400).json({ message: 'Porcentaje inválido en la contraoferta' });
+    }
+    if (pctContra > pctDisp) {
+      return res.status(400).json({ message: 'Porcentaje contraoferta > disponible' });
     }
 
-    // Obtener el porcentaje disponible de la startup
-    const porcentajeDisponible = await getPorcentajeDisponible(oferta.id_startup);
-    const porcentajeContraofrecido = parseFloat(oferta.contraoferta_porcentaje);
+    let inversionRecord;
 
-    if (porcentajeContraofrecido > porcentajeDisponible) {
-      return res.status(400).json({ message: 'El porcentaje ofrecido es mayor que el porcentaje disponible' });
-    }
-
-    let nuevaInversion;
-
-    // Ejecutar la transacción principal
-    await prisma.$transaction(async (prisma) => {
-      // Actualizar la oferta: estado, monto y porcentaje según la contraoferta
-      await prisma.oferta.update({
+    // 3) Transacción: actualizar oferta + merge inversión + decrementar %
+    await prisma.$transaction(async (trx) => {
+      await trx.oferta.update({
         where: { id: ofertaId },
         data: {
           estado: 'Aceptada',
           monto_ofrecido: oferta.contraoferta_monto,
-          porcentaje_ofrecido: porcentajeContraofrecido,
-        },
+          porcentaje_ofrecido: pctContra
+        }
       });
 
-      // Crear la inversión
-      nuevaInversion = await prisma.inversion.create({
-        data: {
-          id_inversor: oferta.id_inversor,
-          id_startup: oferta.id_startup,
-          monto_invertido: oferta.contraoferta_monto,
-          porcentaje_adquirido: porcentajeContraofrecido,
-          valor: 0, // Se calculará más adelante
-        },
+      const existing = await trx.inversion.findUnique({
+        where: {
+          inversor_startup_unique: {
+            id_inversor: oferta.id_inversor,
+            id_startup: oferta.id_startup
+          }
+        }
       });
 
-      // Asociar la inversión al portfolio del inversor
-      await prisma.portfolio.update({
-        where: { id_inversor: oferta.id_inversor },
-        data: {
-          inversiones: {
-            connect: { id: nuevaInversion.id },
-          },
-        },
-      });
+      const montoContra = Number(oferta.contraoferta_monto);
 
-      // Actualizar el porcentaje disponible de la startup
-      await prisma.startup.update({
+      if (existing) {
+        inversionRecord = await trx.inversion.update({
+          where: { id: existing.id },
+          data: {
+            monto_invertido: { increment: montoContra },
+            porcentaje_adquirido: { increment: pctContra },
+            fecha: new Date()
+          }
+        });
+      } else {
+        inversionRecord = await trx.inversion.create({
+          data: {
+            id_inversor: oferta.id_inversor,
+            id_startup: oferta.id_startup,
+            monto_invertido: montoContra,
+            porcentaje_adquirido: pctContra,
+            valor: 0
+          }
+        });
+        await trx.portfolio.update({
+          where: { id_inversor: oferta.id_inversor },
+          data: {
+            inversiones: { connect: { id: inversionRecord.id } }
+          }
+        });
+      }
+
+      await trx.startup.update({
         where: { id: oferta.id_startup },
-        data: {
-          porcentaje_disponible: {
-            decrement: porcentajeContraofrecido,
-          },
-        },
+        data: { porcentaje_disponible: { decrement: pctContra } }
       });
     });
 
-    // Fuera de la transacción: calcular el valor de la inversión en función de la valoración de la startup
+    // 4) Recalcular y actualizar valoraciones e inversiones
     const valoracion = await calcularValoracion(oferta.id_startup);
-    const valor = valoracion * (porcentajeContraofrecido / 100);
-
-    await prisma.inversion.update({
-      where: { id: nuevaInversion.id },
-      data: { valor: valor },
-    });
-
-    // Registrar la valoración histórica de la startup
-    await prisma.ValoracionHistorica.create({
-      data: {
-        startupId: oferta.id_startup,
-        valoracion: valoracion,
-        fecha: new Date(),
-      },
-    });
-
-    // Actualizar los valores de las inversiones relacionadas
     await actualizarValoresInversiones(oferta.id_startup, valoracion);
 
-    // Registrar el valor total del portfolio del inversor
+    // 5) Historial y portfolio histórico
+    await prisma.valoracionHistorica.create({
+      data: {
+        startup: { connect: { id: oferta.id_startup } },
+        valoracion,
+        fecha: new Date()
+      }
+    });
     const valorPortfolio = await calcularValorTotalPortfolio(oferta.id_inversor);
     await prisma.portfolioHistorico.create({
       data: {
         inversorId: oferta.id_inversor,
         valoracion: valorPortfolio,
-        fecha: new Date(),
-      },
+        fecha: new Date()
+      }
     });
 
-    const formatMonto = (monto) => {
-      if (monto >= 1e6) {
-        const millones = monto / 1e6;
-        // Si es entero, sin decimales; si no, con 1 decimal.
-        return `${millones % 1 === 0 ? millones.toFixed(0) : millones.toFixed(1)}M`;
-      } else if (monto >= 1e3) {
-        const miles = monto / 1e3;
-        return `${miles % 1 === 0 ? miles.toFixed(0) : miles.toFixed(1)}K`;
-      } else {
-        return monto.toString();
-      }
-    };
-
-    const montoFormateado = formatMonto(oferta.contraoferta_monto) + "€";
-
-    // Crear la notificación para el inversor (usamos el id del inversor obtenido de la oferta)
+    // 6) Notificación al inversor
+    const montoFmt = Number(oferta.contraoferta_monto)
+      .toLocaleString('es-ES', { maximumFractionDigits: 0 }) + '€';
     await prisma.notificacion.create({
       data: {
         id_usuario: oferta.inversor.id_usuario,
-        contenido: `Tu contraoferta de ${montoFormateado} por el ${porcentajeContraofrecido}% ha sido aceptada.`,
-        tipo: 'inversion',
-      },
+        contenido: `Tu contraoferta de ${montoFmt} por el ${pctContra}% ha sido aceptada.`,
+        tipo: 'inversion'
+      }
     });
 
-    res.status(200).json({ message: 'Contraoferta aceptada y guardada en el portfolio con éxito' });
+    return res.json({ message: 'Contraoferta aceptada y portfolio actualizado' });
+
   } catch (err) {
-    console.error('Error al aceptar la contraoferta:', err);
-    res.status(500).json({ message: 'Error al aceptar la contraoferta' });
+    console.error('acceptCounteroffer error:', err);
+    return res.status(500).json({ message: 'Error interno al aceptar contraoferta' });
   }
 };
-
 
 export const rejectCounteroffer = async (req, res) => {
   const ofertaId = parseInt(req.params.id_oferta, 10); // ID de la oferta

@@ -103,6 +103,8 @@ model Inversion {
   inversor             Inversor       @relation(fields: [id_inversor], references: [id])
   startup              Startup        @relation(fields: [id_startup], references: [id])
   Portfolio            Portfolio?     @relation(fields: [portfolioId], references: [id])
+
+  @@unique([id_inversor, id_startup], name: "inversor_startup_unique")
 }
 
 model Oferta {
