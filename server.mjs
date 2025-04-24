@@ -10,6 +10,7 @@ import groupesRoutes from './routes/groupesRoutes.mjs';
 import profileRoutes from './routes/profileRoutes.mjs';
 import eventRoutes from './routes/eventRoutes.mjs';
 import followRoutes from './routes/followRoutes.mjs';
+import waitlistRoutes from './routes/waitlistRoutes.mjs';
 import { PrismaClient } from '@prisma/client';
 import { verifyToken } from './middlewares/tokenMiddleware.mjs';
 import { createServer } from 'node:http';
@@ -58,6 +59,7 @@ app.use(cookieParser());
 
 // Rutas sin protección (por ejemplo, autenticación)
 app.use('/api/auth', authRoutes);
+app.use('/api/waitlist', waitlistRoutes);
 
 // Rutas protegidas por token: se recomienda aplicar primero el middleware de verificación
 app.use('/api/invest', verifyToken, investRoutes);

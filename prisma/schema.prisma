@@ -290,6 +290,15 @@ model Resena {
   @@map("reseñas")
 }
 
+model WaitlistUser {
+  id          Int      @id @default(autoincrement())
+  correo      String   @unique
+  nombre      String?  // Nombre del usuario (opcional)
+  tipo_usuario String   @db.VarChar(50) // Tipo de usuario: 'startup' o 'investor'
+  fecha_creacion DateTime @default(now()) // Fecha de creación
+  fecha_actualizacion DateTime @updatedAt // Fecha de última actualización
+}
+
 enum TipoMovimiento {
   evento
   inversion
