@@ -1,28 +1,23 @@
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { generateAccessToken } from '../lib/accessToken.mjs';
+import prisma from '../lib/prismaClient.mjs';
+import stripe from '../lib/stripeClient.mjs';
 
-const prisma = new PrismaClient();
-
-// Registro de usuarios
+// Registro de usuario
 export const registerUser = async (req, res) => {
   const { email, password, username } = req.body;
 
   if (!email || !password || !username) {
-    console.error('Faltan datos:', { email, password, username });
     return res.status(400).json({ message: 'Faltan campos requeridos' });
   }
 
   try {
-    // Verificar si el usuario ya existe
     const existingUser = await prisma.usuario.findUnique({ where: { email } });
     if (existingUser) {
-      console.warn('El usuario ya existe:', email);
       return res.status(400).json({ message: 'El usuario ya existe' });
     }
 
-    // Hashear contraseña y crear usuario
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = await prisma.usuario.create({
       data: {
@@ -34,6 +29,19 @@ export const registerUser = async (req, res) => {
 
     const userId = newUser.id;
 
+    // Crear una cuenta de Stripe para este usuario
+    const stripeAccount = await stripe.customers.create({
+      email: email,
+    });
+
+    // Asociar el ID del cliente de Stripe con el usuario
+    await prisma.usuario.update({
+      where: { id: userId },
+      data: {
+        stripeCustomerId: stripeAccount.id, // Guardamos el ID de Stripe para el usuario
+      },
+    });
+
     // Crear contacto asociado
     await prisma.contacto.create({
       data: {
@@ -42,7 +50,6 @@ export const registerUser = async (req, res) => {
       },
     });
 
-    // Crear tokens iniciales (sin rol)
     const accessToken = jwt.sign(
       { userId },
       process.env.JWT_SECRET,
@@ -54,11 +61,10 @@ export const registerUser = async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // Configurar cookies
     res.cookie('token', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 60 * 60 * 1000, // 1 hora
+      maxAge: 60 * 60 * 1000,
       sameSite: 'Strict',
       path: '/',
     });
@@ -66,7 +72,7 @@ export const registerUser = async (req, res) => {
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+      maxAge: 7 * 24 * 60 * 60 * 1000,
       sameSite: 'Strict',
       path: '/',
     });
@@ -77,6 +83,7 @@ export const registerUser = async (req, res) => {
     res.status(500).json({ message: 'Error al registrar el usuario' });
   }
 };
+
 
 // Inicio de sesión
 export const loginUser = async (req, res) => {
@@ -99,6 +106,8 @@ export const loginUser = async (req, res) => {
       return res.status(403).json({ message: 'Contraseña incorrecta' });
     }
 
+    console.log('Cookies being set...');
+
     const accessToken = generateAccessToken(user)
     const refreshToken = jwt.sign(
       { userId: user.id, role: user.rol },
@@ -108,7 +117,7 @@ export const loginUser = async (req, res) => {
 
     res.cookie('token', accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // Solo si estás usando HTTPS
+      secure: process.env.NODE_ENV === 'production' ? true : false,
       maxAge: 60 * 60 * 1000, // 1 hora
       sameSite: 'Strict', // Protege contra ataques CSRF
       path: '/', // Establece el path adecuado para las cookies
@@ -116,11 +125,15 @@ export const loginUser = async (req, res) => {
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true, // No accesible desde JavaScript
-      secure: process.env.NODE_ENV === 'production', // Solo si estás usando HTTPS
+      secure: process.env.NODE_ENV === 'production' ? true : false, // Solo si estás usando HTTPS
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
       sameSite: 'Strict', // Protege contra ataques CSRF
       path: '/', // Establece el path adecuado para las cookies
     });
+
+    console.log('Access Token:', accessToken);
+    console.log('Refresh Token:', refreshToken);
+
 
     return res.status(200).json({ message: 'Inicio de sesión exitoso', accessToken });
   } catch (error) {

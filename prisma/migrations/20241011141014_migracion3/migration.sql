@@ -1,2 +1,0 @@
--- AlterTable
-ALTER TABLE "Usuario" ADD COLUMN     "fecha_creacion" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

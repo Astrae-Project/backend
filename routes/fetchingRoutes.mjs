@@ -1,5 +1,7 @@
 import express from 'express';
 import { datosUsuario, datosPortfolio, gruposUsuario, movimientosRecientes, obtenerContacto, obtenerEventos, startupsRecomendadas, usuarioEspecifico, obtenerHistoricos, todasStartups, todosGrupos, movimientosSinEventos, movimientosSeguidos, todosUsuarios, obtenerNotificaciones, obtenerOferta, movimientosInversionStartups, startupsSeguidas } from '../controllers/fetchController.mjs';
+import pkg from 'countries-cities';
+const { getCountries, getCities } = pkg;
 
 const router = express.Router();
 
@@ -32,5 +34,8 @@ router.get('/eventos', obtenerEventos);
 router.get('/historicos', obtenerHistoricos);
 router.get('/notificaciones', obtenerNotificaciones);
 router.get('/ofertas', obtenerOferta);
+router.get('/paises', getCountries);
+router.get('/ciudades', getCities);
+
  
 export default router;

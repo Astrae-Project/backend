@@ -19,7 +19,7 @@ export async function datosUsuario (req, res) {
         }
 
         // Verificar el rol del usuario
-        if (role === 'inversor') {
+        if (role === "inversor") {
             // Lógica para el inversor
             const inversor = await prisma.inversor.findFirst({
                 where: { id_usuario: userId },
@@ -1470,7 +1470,7 @@ export async function movimientosSinEventos(req, res) {
 
 export async function movimientosInversionStartups(req, res) {
     const token = req.cookies.token;
-    const usernameFromRequest = req.query.username || req.body.username;
+    const usernameFromRequest = req.query.username;
   
     try {
       let userId = null;
