@@ -4,21 +4,31 @@ import { generateAccessToken } from '../lib/accessToken.mjs';
 import prisma from '../lib/prismaClient.mjs';
 import stripe from '../lib/stripeClient.mjs';
 
-// Registro de usuario
 export const registerUser = async (req, res) => {
   const { email, password, username } = req.body;
 
+  // Verificar si los campos requeridos están presentes
   if (!email || !password || !username) {
     return res.status(400).json({ message: 'Faltan campos requeridos' });
   }
 
   try {
+    // Verificar si el usuario ya existe
+    console.log('Verificando si el usuario ya existe con el email:', email);
     const existingUser = await prisma.usuario.findUnique({ where: { email } });
+    
     if (existingUser) {
+      console.log('El usuario ya existe:', existingUser);
       return res.status(400).json({ message: 'El usuario ya existe' });
     }
 
+    // Hash de la contraseña
+    console.log('Generando hash para la contraseña');
     const hashedPassword = await bcrypt.hash(password, 10);
+    console.log('Contraseña hasheada:', hashedPassword);
+
+    // Crear el nuevo usuario en la base de datos
+    console.log('Creando el nuevo usuario');
     const newUser = await prisma.usuario.create({
       data: {
         email,
@@ -26,23 +36,28 @@ export const registerUser = async (req, res) => {
         username,
       },
     });
+    console.log('Nuevo usuario creado:', newUser);
 
     const userId = newUser.id;
 
     // Crear una cuenta de Stripe para este usuario
+    console.log('Creando cuenta de Stripe para el usuario con email:', email);
     const stripeAccount = await stripe.customers.create({
       email: email,
     });
+    console.log('Cuenta de Stripe creada:', stripeAccount);
 
     // Asociar el ID del cliente de Stripe con el usuario
+    console.log('Actualizando el usuario con el ID de Stripe:', stripeAccount.id);
     await prisma.usuario.update({
       where: { id: userId },
       data: {
-        stripeCustomerId: stripeAccount.id, // Guardamos el ID de Stripe para el usuario
+        stripeCustomerId: stripeAccount.id,
       },
     });
 
     // Crear contacto asociado
+    console.log('Creando contacto asociado con el usuario');
     await prisma.contacto.create({
       data: {
         id_usuario: userId,
@@ -50,35 +65,54 @@ export const registerUser = async (req, res) => {
       },
     });
 
-    const accessToken = jwt.sign(
-      { userId },
-      process.env.JWT_SECRET,
-      { expiresIn: '1h' }
-    );
-    const refreshToken = jwt.sign(
-      { userId },
-      process.env.JWT_REFRESH_SECRET,
-      { expiresIn: '7d' }
-    );
+    // Generación de los tokens
+    try {
+      console.log(process.env.JWT_SECRET);
+      console.log('Generando el JWT...');
+      console.log('Generando el access token...');
+      const accessToken = jwt.sign(
+        { userId },
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
+      );
+      console.log('Access Token generado:', accessToken);
 
-    res.cookie('token', accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 60 * 60 * 1000,
-      sameSite: 'Strict',
-      path: '/',
-    });
+      console.log('Generando el refresh token...');
+      const refreshToken = jwt.sign(
+        { userId },
+        process.env.JWT_REFRESH_SECRET,
+        { expiresIn: '7d' }
+      );
+      console.log('Refresh Token generado:', refreshToken);
 
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      sameSite: 'Strict',
-      path: '/',
-    });
+      // Configuración de las cookies
+      console.log('Configurando las cookies para los tokens...');
+      res.cookie('token', accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 60 * 60 * 1000, // 1 hora
+        sameSite: 'Strict',
+        path: '/',
+      });
 
-    res.status(201).json({ message: 'Usuario registrado con éxito' });
+      res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+        sameSite: 'Strict',
+        path: '/',
+      });
+
+      // Respuesta exitosa
+      console.log('Usuario registrado con éxito');
+      res.status(201).json({ message: 'Usuario registrado con éxito' });
+    } catch (tokenError) {
+      console.error('Error al generar los tokens:', tokenError);
+      return res.status(500).json({ message: 'Error al generar los tokens' });
+    }
+
   } catch (err) {
+    // Manejo de errores en la creación de usuario
     console.error('Error en el registro:', err);
     res.status(500).json({ message: 'Error al registrar el usuario' });
   }
