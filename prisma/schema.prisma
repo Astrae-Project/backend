@@ -34,7 +34,7 @@ model Usuario {
   Grupo               Grupo[]
   stripeCustomerId    String?        @unique // ID de cliente Stripe para métodos de pago
   payment_method_id   String? // ID del PaymentMethod predeterminado
-  Stripe              stripeAccount?
+  stripeAccount       stripeAccount?
 }
 
 model Inversor {

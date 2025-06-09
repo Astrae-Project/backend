@@ -11,6 +11,7 @@ import profileRoutes from './routes/profileRoutes.mjs';
 import eventRoutes from './routes/eventRoutes.mjs';
 import followRoutes from './routes/followRoutes.mjs';
 import waitlistRoutes from './routes/waitlistRoutes.mjs';
+import stripeRoutes from './routes/stripeRoutes.mjs';
 import { PrismaClient } from '@prisma/client';
 import { verifyToken } from './middlewares/tokenMiddleware.mjs';
 import { createServer } from 'node:http';
@@ -64,13 +65,14 @@ app.use('/api/auth', authRoutes);
 app.use('/api/waitlist', waitlistRoutes);
 
 // Rutas protegidas por token: se recomienda aplicar primero el middleware de verificación
-app.use('/api/invest', verifyToken, checkStripeAccount, requirePaymentMethod, investRoutes);
+app.use('/api/invest', verifyToken, investRoutes);
 app.use('/api/search', verifyToken, searchingRoutes);
 app.use('/api/data', verifyToken, fetchingRoutes);
 app.use('/api/grupos', verifyToken, groupesRoutes);
 app.use('/api/perfil', verifyToken, profileRoutes);
 app.use('/api/evento', verifyToken, eventRoutes);
 app.use('/api/follow', verifyToken, followRoutes);
+app.use('/api/stripe', verifyToken, stripeRoutes);
 
 // Ruta principal
 app.get('/', (req, res) => {

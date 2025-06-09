@@ -748,3 +748,49 @@ export const changeRole = async (req, res) => {
     return res.status(500).json({ message: 'Error al cambiar el rol del usuario' });
   }
 };
+
+export const changePermission = async (req, res) => {
+  try {
+    const { groupId, permiso, abierto } = req.body;
+
+    if (!groupId || !permiso || typeof abierto !== 'boolean') {
+      return res.status(400).json({ message: 'Datos inválidos' });
+    }
+
+    // Verificamos que el grupo exista
+    const grupo = await prisma.grupo.findUnique({
+      where: { id: groupId },
+    });
+
+    if (!grupo) {
+      return res.status(404).json({ message: 'Grupo no encontrado' });
+    }
+
+    // Buscamos el permiso
+    const permisoExistente = await prisma.configuracionPermiso.findFirst({
+      where: {
+        id_grupo: groupId,
+        permiso: permiso,
+      },
+    });
+
+    if (!permisoExistente) {
+      return res.status(404).json({ message: 'Permiso no encontrado' });
+    }
+
+    // Lo actualizamos
+    await prisma.configuracionPermiso.update({
+      where: {
+        id: permisoExistente.id,
+      },
+      data: {
+        abierto: abierto,
+      },
+    });
+
+    return res.status(200).json({ message: 'Permiso actualizado correctamente' });
+  } catch (error) {
+    console.error('Error al cambiar permiso:', error);
+    return res.status(500).json({ message: 'Error del servidor' });
+  }
+};

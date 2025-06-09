@@ -669,6 +669,46 @@ export async function todasStartups (req, res) {
     }
 };
 
+export async function startupsStripe(req, res) {
+    try {
+        const startups = await prisma.startup.findMany({
+            where: {
+                usuario: {
+                    stripeAccount: {
+                        is: {
+                            stripeAccountId: { not: null },
+                            accountStatus: 'active',  // entre comillas porque es un enum o string
+                        },
+                    },
+                },
+            },
+            include: {
+                usuario: {
+                    select: {
+                        username: true,
+                        avatar: true,
+                        seguidores: true,
+                    },
+                },
+                inversiones: {
+                    include: {
+                        inversor: true,
+                    },
+                },
+            },
+        });
+
+        if (!startups || startups.length === 0) {
+            return res.status(404).json({ message: 'No se encontraron startups con Stripe' });
+        }
+
+        res.json({ startups });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error al recuperar las startups con Stripe' });
+    }
+};
+
 export async function startupsRecomendadas (req, res) {
     try {
         // Obtener startups aleatorias

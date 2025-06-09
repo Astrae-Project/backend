@@ -1,5 +1,5 @@
 import express from 'express';
-import { createGroup, dropGroup, dataGroup, changeData, addMember, dropMember, sendMessage, seeMessage, changeRole, joinGroup, fueraGrupo } from '../controllers/groupControllers.mjs';
+import { createGroup, dropGroup, dataGroup, changeData, addMember, dropMember, sendMessage, seeMessage, changeRole, joinGroup, fueraGrupo, changePermission } from '../controllers/groupControllers.mjs';
 
 const router = express.Router();
 
@@ -34,5 +34,7 @@ router.get('/ver/:groupId/mensajes', seeMessage);
 
 // Cambiar Rol de un Miembro
 router.put('/cambio-rol/:groupId/miembros/:memberId', changeRole);
+
+router.put('/cambio-permiso/:groupId', changePermission)
 
 export default router;

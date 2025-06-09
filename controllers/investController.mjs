@@ -47,9 +47,12 @@ export const offer = async (req, res) => {
     customer: usuario.stripeCustomerId,
     confirm: true,
     capture_method: 'manual',
+    payment_method_types: ['card', 'link'],
+    setup_future_usage: 'off_session',
     transfer_data: { destination: startup.stripeAccountId },
-    application_fee_amount: 0  // comisión pendiente
+    application_fee_amount: 0
   });
+  
 
   // Crear oferta + escrow
   const oferta = await prisma.oferta.create({

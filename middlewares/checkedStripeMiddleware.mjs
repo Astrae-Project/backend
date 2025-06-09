@@ -1,4 +1,5 @@
 import prisma from '../lib/prismaClient.mjs';
+import jwt from 'jsonwebtoken';
 
 export const checkStripeAccount = async (req, res, next) => {
   try {
