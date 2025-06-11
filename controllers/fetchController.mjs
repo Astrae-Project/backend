@@ -1661,16 +1661,19 @@ export async function obtenerOferta(req, res) {
 
       ofertas = await prisma.oferta.findMany({
         where: {
-          id_startup: startup.id,
-          estado: "Pendiente",
+            id_startup: startup.id,
+            estado: "Pendiente",
+            AND: [
+            { contraoferta_monto: null },
+            { contraoferta_porcentaje: null },
+            ],
         },
         include: {
-          inversor: { include: { usuario: true } },
-          startup: { include: { usuario: true } },
-          escrow: true,
+            inversor: { include: { usuario: true } },
+            startup: { include: { usuario: true } },
+            escrow: true,
         },
-      });
-
+        });
     }
     else if (userRole === "inversor") {
 

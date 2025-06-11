@@ -1,5 +1,6 @@
 import prisma from "../lib/prismaClient.mjs";
 import jwt from 'jsonwebtoken';
+import path from 'path';
 
 export async function saveContact(req, res) {
     const { correo, twitter, linkedin, facebook, instagram, otros } = req.body;
@@ -293,36 +294,83 @@ export async function darPuntuacion(req, res) {
 }
 
 export async function marcarComoLeido(req, res) {
-    const token = req.cookies.token;
-    const { id } = req.body; // ID de la notificación seleccionada
+  const token = req.cookies.token;
+  const { id } = req.body; // ID de la notificación seleccionada
   
-    if (!token) {
-      return res.status(401).json({ message: "No autorizado" });
-    }
-  
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const userId = decoded.userId;
-  
-      // Verificar que la notificación exista y pertenezca al usuario
-      const notificacion = await prisma.notificacion.findUnique({
-        where: { id },
-      });
-  
-      if (!notificacion || notificacion.id_usuario !== userId) {
-        return res.status(404).json({ message: "Notificación no encontrada" });
-      }
-  
-      // Actualizar el estado de la notificación a leido
-      await prisma.notificacion.update({
-        where: { id },
-        data: { leido: true },
-      });
-  
-      res.json({ message: "Notificación marcada como leída" });
-    } catch (error) {
-      console.error("Error al marcar notificación como leída:", error);
-      res.status(500).json({ error: "Error interno del servidor" });
-    }
+  if (!token) {
+    return res.status(401).json({ message: "No autorizado" });
   }
   
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId;
+  
+    // Verificar que la notificación exista y pertenezca al usuario
+    const notificacion = await prisma.notificacion.findUnique({
+      where: { id },
+    });
+
+    if (!notificacion || notificacion.id_usuario !== userId) {
+      return res.status(404).json({ message: "Notificación no encontrada" });
+    }
+
+    // Actualizar el estado de la notificación a leido
+    await prisma.notificacion.update({
+      where: { id },
+      data: { leido: true },
+    });
+
+    res.json({ message: "Notificación marcada como leída" });
+  } catch (error) {
+    console.error("Error al marcar notificación como leída:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+}
+
+export async function subirDocumento (req,res) {
+  const token = req.cookies.token;
+  if (!token) {
+    return res.status(401).json({ message: 'Token no proporcionado' });
+  }
+
+  let userId;
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    userId = decoded.userId;
+  } catch {
+    return res.status(401).json({ message: 'Token inválido' });
+  }
+
+  // 1. Buscar la startup de este usuario
+  const startup = await prisma.startup.findFirst({
+    where: { id_usuario: parseInt(userId, 10) }
+  });
+  if (!startup) {
+    return res.status(404).json({ message: 'No se encontró startup para este usuario' });
+  }
+
+  // 2. Comprobar que ha llegado el archivo
+  if (!req.file) {
+    return res.status(400).json({ message: 'No se recibió ningún archivo' });
+  }
+
+  // 3. Guardar registro en la BD
+  try {
+    const nuevoDocumento = await prisma.documento.create({
+      data: {
+        id_startup: startup.id,
+        nombre: req.file.originalname,
+        url: `/uploads/${req.file.filename}`,
+        tipo: path.extname(req.file.originalname).slice(1),
+      },
+    });
+
+    return res.status(200).json({
+      message: 'Documento subido correctamente',
+      documento: nuevoDocumento
+    });
+  } catch (err) {
+    console.error('Error al crear registro de documento:', err);
+    return res.status(500).json({ message: 'Error interno al guardar documento' });
+  }
+};

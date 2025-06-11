@@ -73,6 +73,17 @@ model Startup {
   usuario               Usuario               @relation(fields: [id_usuario], references: [id], onDelete: NoAction, onUpdate: NoAction)
   resenas               Resena[]
   valoracion_historica  ValoracionHistorica[]
+  Documento             Documento[]
+}
+
+model Documento {
+  id           Int   @id @default(autoincrement())
+  id_startup   Int
+  nombre       String
+  url          String   
+  tipo         String
+  startup      Startup  @relation(fields: [startupId], references: [id])
+  creadoEn     DateTime @default(now())
 }
 
 model ValoracionHistorica {
