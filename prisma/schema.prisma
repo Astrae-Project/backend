@@ -77,13 +77,13 @@ model Startup {
 }
 
 model Documento {
-  id           Int   @id @default(autoincrement())
-  id_startup   Int
-  nombre       String
-  url          String   
-  tipo         String
-  startup      Startup  @relation(fields: [startupId], references: [id])
-  creadoEn     DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  id_startup Int
+  nombre     String
+  url        String
+  tipo       String
+  startup    Startup  @relation(fields: [id_startup], references: [id])
+  creadoEn   DateTime @default(now())
 }
 
 model ValoracionHistorica {

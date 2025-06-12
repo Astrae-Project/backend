@@ -1,6 +1,6 @@
 import express from 'express';
 import { darPuntuacion, marcarComoLeido, saveContact, changeData, subirDocumento } from '../controllers/profileControllers.mjs';
-import upload from '../middlewares/multer.config.mjs';
+import multer from 'multer';
 
 const router = express.Router();
 
@@ -13,6 +13,22 @@ router.put('/leido', marcarComoLeido );
 
 router.put('/editar-perfil', changeData );
 
-router.post('/subir-documento', upload.single('archivo') ,subirDocumento)
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');           // carpeta donde se guardan los archivos
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random()*1E9);
+    cb(null, `${uniqueSuffix}-${file.originalname}`);
+  }
+});
+
+const upload = multer({ storage });
+
+router.post(
+  '/subir-documento/:id_startup',
+  upload.single('archivo'),
+  subirDocumento
+);
 
 export default router;

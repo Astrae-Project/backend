@@ -327,50 +327,50 @@ export async function marcarComoLeido(req, res) {
   }
 }
 
-export async function subirDocumento (req,res) {
+export async function subirDocumento(req, res) {
   const token = req.cookies.token;
   if (!token) {
     return res.status(401).json({ message: 'Token no proporcionado' });
   }
 
-  let userId;
+  let decoded;
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    userId = decoded.userId;
-  } catch {
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (err) {
     return res.status(401).json({ message: 'Token inválido' });
   }
 
-  // 1. Buscar la startup de este usuario
   const startup = await prisma.startup.findFirst({
-    where: { id_usuario: parseInt(userId, 10) }
+    where: { id_usuario: decoded.userId }
   });
+
   if (!startup) {
     return res.status(404).json({ message: 'No se encontró startup para este usuario' });
   }
 
-  // 2. Comprobar que ha llegado el archivo
+  const paramId = parseInt(req.params.id_startup, 10);
+  if (paramId !== startup.id) {
+    return res.status(403).json({ message: 'No autorizado para subir en esta startup' });
+  }
+
   if (!req.file) {
     return res.status(400).json({ message: 'No se recibió ningún archivo' });
   }
 
-  // 3. Guardar registro en la BD
   try {
     const nuevoDocumento = await prisma.documento.create({
       data: {
         id_startup: startup.id,
         nombre: req.file.originalname,
         url: `/uploads/${req.file.filename}`,
-        tipo: path.extname(req.file.originalname).slice(1),
-      },
+        tipo: req.body.tipo || path.extname(req.file.originalname).slice(1),
+      }
     });
-
     return res.status(200).json({
       message: 'Documento subido correctamente',
       documento: nuevoDocumento
     });
   } catch (err) {
-    console.error('Error al crear registro de documento:', err);
     return res.status(500).json({ message: 'Error interno al guardar documento' });
   }
-};
+}
