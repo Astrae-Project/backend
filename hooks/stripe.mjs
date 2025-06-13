@@ -1,9 +1,32 @@
 import { buffer } from 'micro';
 import Stripe from 'stripe';
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+import dotenv from 'dotenv';
+import { prisma } from '../../../lib/prisma';
 
-// Función para manejar el webhook
+dotenv.config();
+
+const stripeEnabled = process.env.STRIPE_ENABLED === 'true';
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+let stripe = null;
+if (stripeEnabled && stripeSecretKey) {
+  stripe = new Stripe(stripeSecretKey, {
+    apiVersion: '2023-10-16',
+  });
+}
+
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
 export const stripeWebhook = async (req, res) => {
+  if (!stripe) {
+    return res.status(503).send('Stripe deshabilitado');
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).send('Método no permitido');
   }
@@ -14,17 +37,12 @@ export const stripeWebhook = async (req, res) => {
   let event;
 
   try {
-    event = stripe.webhooks.constructEvent(
-      buf,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET
-    );
+    event = stripe.webhooks.constructEvent(buf, sig, webhookSecret);
   } catch (err) {
     console.error('⚠️  Error verificando el webhook:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  // Procesar los diferentes tipos de evento
   try {
     switch (event.type) {
       case 'account.updated':
@@ -39,7 +57,7 @@ export const stripeWebhook = async (req, res) => {
         }
 
         await prisma.stripeAccount.update({
-          where: { stripeAccountId: stripeAccountId },
+          where: { stripeAccountId },
           data: { accountStatus: newStatus },
         });
 

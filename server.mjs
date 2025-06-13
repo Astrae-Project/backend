@@ -23,7 +23,7 @@ import { fileURLToPath } from 'url';
 
 // Configuración de variables de entorno
 dotenv.config();
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 5000; 
 
 // Crear instancia de Express y servidor HTTP
 const app = express();
