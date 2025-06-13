@@ -327,6 +327,34 @@ export async function marcarComoLeido(req, res) {
   }
 }
 
+export async function verDocumento(req, res) {
+  const token = req.cookies.token;
+  if (!token) {
+    return res.status(401).json({ message: 'Token no proporcionado' });
+  }
+
+  try {
+    jwt.verify(token, process.env.JWT_SECRET);
+  } catch (err) {
+    return res.status(401).json({ message: 'Token inválido' });
+  }
+
+  const id_startup = parseInt(req.params.id_startup, 10);
+  if (isNaN(id_startup)) {
+    return res.status(400).json({ message: 'ID de startup inválido' });
+  }
+
+  try {
+    const documentos = await prisma.documento.findMany({
+      where: { id_startup: id_startup }
+    });
+
+    return res.status(200).json(documentos);
+  } catch (err) {
+    return res.status(500).json({ message: 'Error interno al recuperar documentos' });
+  }
+}
+
 export async function subirDocumento(req, res) {
   const token = req.cookies.token;
   if (!token) {
