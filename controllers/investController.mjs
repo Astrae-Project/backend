@@ -470,6 +470,25 @@ export const acceptCounteroffer = async (req, res) => {
       await trx.startup.update({ where: { id: oferta.id_startup }, data: { porcentaje_disponible: { decrement: pctContra } } });
     });
 
+    const valoracion = await calcularValoracion(oferta.id_startup);
+    await actualizarValoresInversiones(oferta.id_startup, valoracion);
+    const valorPortfolio = await calcularValorTotalPortfolio(oferta.id_inversor);
+
+    await prisma.valoracionHistorica.create({
+      data: {
+        startup: { connect: { id: oferta.id_startup } },
+        valoracion,
+        fecha: new Date(),
+      },
+    });
+    await prisma.portfolioHistorico.create({
+      data: {
+        inversorId: oferta.id_inversor,
+        valoracion: valorPortfolio,
+        fecha: new Date(),
+      },
+    });
+
     // Notificar inversor
     const montoFmt = montoContra.toLocaleString('es-ES', { maximumFractionDigits: 2 }) + '€';
     await prisma.notificacion.create({

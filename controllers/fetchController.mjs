@@ -127,6 +127,7 @@ export async function datosUsuario (req, res) {
                             inversor: true,
                         },
                     },
+                    hitos: { orderBy: { fechaObjetivo: 'asc' } },
                 },
             });
 
@@ -529,6 +530,7 @@ export async function usuarioEspecifico(req, res) {
                     },
                     inversiones: true,
                     valoracion_historica: true,
+                    hitos: {orderBy: { fechaObjetivo: 'asc' }},
                 },
             });
 

@@ -1,5 +1,5 @@
 import express from 'express';
-import { darPuntuacion, marcarComoLeido, saveContact, changeData, subirDocumento, verDocumento } from '../controllers/profileControllers.mjs';
+import { darPuntuacion, marcarComoLeido, saveContact, changeData, subirDocumento, verDocumento, downloadDocumento, obtenerHitosStartup, crearHito, actualizarHito, eliminarHito } from '../controllers/profileControllers.mjs';
 import multer from 'multer';
 
 const router = express.Router();
@@ -26,7 +26,13 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 router.post('/subir-documento/:id_startup', upload.single('archivo'), subirDocumento);
-
 router.get('/documento/:id_startup', verDocumento);
+router.get("/documento/download/:id", downloadDocumento);
+
+router.get('/startups/:id_startup/hitos', obtenerHitosStartup);
+router.post('/startups/:id_startup/hitos', crearHito);
+router.put('/hitos/:id', actualizarHito);
+router.delete('/hitos/:id', eliminarHito);
+
 
 export default router;

@@ -74,6 +74,7 @@ model Startup {
   resenas               Resena[]
   valoracion_historica  ValoracionHistorica[]
   Documento             Documento[]
+  hitos                 Hito[]
 }
 
 model Documento {
@@ -84,6 +85,17 @@ model Documento {
   tipo       String
   startup    Startup  @relation(fields: [id_startup], references: [id])
   creadoEn   DateTime @default(now())
+}
+
+model Hito {
+  id             Int   @id @default(autoincrement())
+  id_startup     Int
+  titulo         String
+  fechaObjetivo  DateTime
+  estado         EstadoHito
+  startup        Startup  @relation(fields: [id_startup], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 model ValoracionHistorica {
@@ -382,4 +394,11 @@ enum Permiso {
   crear_ofertas
   subir_documentos
   eliminar_documentos
+}
+
+enum EstadoHito {
+  cumplido
+  fallado
+  actual
+  futuro
 }

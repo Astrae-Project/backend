@@ -1,6 +1,7 @@
 import prisma from "../lib/prismaClient.mjs";
 import jwt from 'jsonwebtoken';
 import path from 'path';
+import fs from 'fs';
 
 export async function saveContact(req, res) {
     const { correo, twitter, linkedin, facebook, instagram, otros } = req.body;
@@ -402,3 +403,136 @@ export async function subirDocumento(req, res) {
     return res.status(500).json({ message: 'Error interno al guardar documento' });
   }
 }
+
+export async function downloadDocumento(req, res) {
+  const documentoId = parseInt(req.params.id, 10);
+  const token = req.cookies.token;
+
+  if (!token) {
+    return res.status(401).json({ message: "Token no proporcionado" });
+  }
+
+  let decoded;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (err) {
+    return res.status(401).json({ message: "Token inválido" });
+  }
+
+  const userId = decoded.userId;
+  if (!userId) {
+    return res.status(400).json({ message: "ID de usuario no encontrado en el token" });
+  }
+
+  try {
+    const documento = await prisma.documento.findUnique({
+      where: { id: documentoId },
+    });
+
+    if (!documento) {
+      return res.status(404).json({ message: "Documento no encontrado" });
+    }
+
+    // Asegúrate de que la ruta esté bien: si 'url' guarda '/uploads/...' eliminamos la primera barra
+    const relativePath = documento.url.startsWith('/')
+      ? documento.url.slice(1)
+      : documento.url;
+
+    const filePath = path.resolve(process.cwd(), relativePath);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: "Archivo no encontrado en el servidor" });
+    }
+
+    // Descargar el archivo con el nombre original (o por defecto)
+    res.download(filePath, documento.nombre || "documento.pdf");
+  } catch (error) {
+    console.error("Error al descargar el documento:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+}
+
+// Obtener todos los hitos de una startup
+export const obtenerHitosStartup = async (req, res) => {
+  const { id_startup } = req.params;
+
+  const startupId = parseInt(id_startup, 10);
+  if (isNaN(startupId)) {
+    return res.status(400).json({ error: "ID de startup inválido" });
+  }
+
+  try {
+    const hitos = await prisma.hito.findMany({
+      where: { id_startup: startupId },
+      orderBy: { fechaObjetivo: 'desc' }
+    });
+    res.json(hitos);
+  } catch (error) {
+    console.error("Error al obtener los hitos:", error);
+    res.status(500).json({ error: "Error al obtener los hitos" });
+  }
+};
+
+export const crearHito = async (req, res) => {
+  const { id_startup } = req.params;
+  const { titulo, fechaObjetivo, estado } = req.body;
+
+  if (!titulo || !fechaObjetivo || !estado) {
+    return res.status(400).json({ error: "Faltan campos obligatorios" });
+  }
+
+  const startupId = parseInt(id_startup, 10);
+  if (isNaN(startupId)) {
+    return res.status(400).json({ error: "ID de startup inválido" });
+  }
+
+  try {
+    const nuevoHito = await prisma.hito.create({
+      data: {
+        id_startup: startupId,
+        titulo,
+        fechaObjetivo: new Date(fechaObjetivo),
+        estado
+      }
+    });
+    res.status(201).json(nuevoHito);
+  } catch (error) {
+    console.error("Error al crear el hito:", error);
+    res.status(500).json({ error: "Error al crear el hito" });
+  }
+};
+
+// Editar un hito
+export const actualizarHito = async (req, res) => {
+  const { id } = req.params;
+  const { titulo, fechaObjetivo, estado } = req.body;
+
+  try {
+    const hitoActualizado = await prisma.hito.update({
+      where: { id },
+      data: {
+        titulo,
+        fechaObjetivo: new Date(fechaObjetivo),
+        estado
+      }
+    });
+    res.json(hitoActualizado);
+  } catch (error) {
+    console.error("Error al actualizar el hito:", error);
+    res.status(500).json({ error: "Error al actualizar el hito" });
+  }
+};
+
+// Eliminar un hito
+export const eliminarHito = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    await prisma.hito.delete({ where: { id } });
+    res.status(204).send();
+  } catch (error) {
+    console.error("Error al eliminar el hito:", error);
+    res.status(500).json({ error: "Error al eliminar el hito" });
+  }
+};
+ 
