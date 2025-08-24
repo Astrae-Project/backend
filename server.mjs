@@ -88,6 +88,10 @@ app.use((err, req, res, next) => {
 // Iniciar el servidor
 const startServer = async () => {
   try {
+    // DEBUG TEMPORAL - pega logs y luego bórralo
+console.log('DEBUG: process.env.DATABASE_URL exists?', !!process.env.DATABASE_URL);
+console.log('DEBUG: DATABASE_URL startsWith postgres?', typeof process.env.DATABASE_URL === 'string' && process.env.DATABASE_URL.startsWith('postgres'));
+
     // Conectar a la base de datos
     await prisma.$connect();
     console.log('Conectado a la base de datos');
