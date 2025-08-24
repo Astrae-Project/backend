@@ -16,10 +16,7 @@ import { PrismaClient } from '@prisma/client';
 import { verifyToken } from './middlewares/tokenMiddleware.mjs';
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
-import { checkStripeAccount } from './middlewares/checkedStripeMiddleware.mjs';
-import { requirePaymentMethod } from './middlewares/paymentMethodMiddleware.mjs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
 // Configuración de variables de entorno
 dotenv.config();
