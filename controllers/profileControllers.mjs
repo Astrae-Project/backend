@@ -58,22 +58,16 @@ export async function saveContact(req, res) {
 
 export const changeData = async (req, res) => {
   try {
-    console.log('[1] Inicio de changeData');
-
     const token = req.cookies.token;
-    console.log('[2] Token recibido:', token);
-
     if (!token) {
-      console.warn('[2.1] Token no proporcionado');
+      console.warn('Token no proporcionado');
       return res.status(401).json({ message: 'Token no proporcionado' });
     }
 
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
     const userId = parseInt(decodedToken.userId, 10);
-    console.log('[3] Token decodificado. ID de usuario:', userId);
-
     if (!userId) {
-      console.warn('[3.1] ID de usuario no encontrado en el token');
+      console.warn('ID de usuario no encontrado en el token');
       return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
     }
 
@@ -90,8 +84,6 @@ export const changeData = async (req, res) => {
       porcentaje_disponible,
     } = req.body;
 
-    console.log('[4] Datos recibidos del body:', req.body);
-
     const usuario = await prisma.usuario.findUnique({
       where: { id: userId },
       include: {
@@ -99,8 +91,6 @@ export const changeData = async (req, res) => {
         startups: true,
       },
     });
-
-    console.log('[5] Usuario encontrado:', usuario);
 
     if (!usuario) {
       console.warn('[5.1] Usuario no encontrado en la base de datos');
@@ -129,7 +119,6 @@ export const changeData = async (req, res) => {
 
     // Inversor
     const inversor = usuario.inversores?.[0]; // en plural
-    console.log('[6] Inversor detectado:', inversor);
 
     if (inversor) {
       const dataInversor = {};
@@ -143,7 +132,6 @@ export const changeData = async (req, res) => {
       }
 
       if (Object.keys(dataInversor).length > 0) {
-        console.log('[6.1] Actualizando datos de inversor:', dataInversor);
         await prisma.inversor.update({
           where: { id_usuario: userId },
           data: dataInversor,
@@ -153,7 +141,6 @@ export const changeData = async (req, res) => {
 
     // Startup
     const startup = usuario.startups?.[0]; // en plural
-    console.log('[7] Startup detectada:', startup);
 
     if (startup) {
       const dataStartup = {};
@@ -182,7 +169,6 @@ export const changeData = async (req, res) => {
       }
 
       if (Object.keys(dataStartup).length > 0) {
-        console.log('[7.1] Actualizando datos de startup:', dataStartup);
         await prisma.startup.update({
           where: { id_usuario: userId },
           data: dataStartup,
@@ -192,7 +178,6 @@ export const changeData = async (req, res) => {
 
     // Usuario
     if (Object.keys(dataUsuario).length > 0) {
-      console.log('[8] Actualizando datos de usuario:', dataUsuario);
       await prisma.usuario.update({
         where: { id: userId },
         data: dataUsuario,
@@ -200,11 +185,9 @@ export const changeData = async (req, res) => {
     }
 
     if (cambios.length === 0) {
-      console.log('[9] No se realizaron cambios en el perfil');
       return res.status(200).json({ message: 'No se realizaron cambios en el perfil' });
     }
 
-    console.log('[10] Cambios realizados:', cambios);
     return res.status(200).json({ message: 'Perfil actualizado correctamente', cambios });
 
   } catch (error) {
@@ -507,9 +490,19 @@ export const actualizarHito = async (req, res) => {
   const { id } = req.params;
   const { titulo, fechaObjetivo, estado } = req.body;
 
+  if (!titulo || !fechaObjetivo || !estado) {
+    return res.status(400).json({ error: "Faltan campos obligatorios"
+    });
+  }
+
+  const hitoId = parseInt(id, 10);
+  if (isNaN(hitoId)) {
+    return res.status(400).json({ error: "ID de hito inválido" });
+  }
+
   try {
     const hitoActualizado = await prisma.hito.update({
-      where: { id },
+      where: { id: hitoId },
       data: {
         titulo,
         fechaObjetivo: new Date(fechaObjetivo),
@@ -528,11 +521,12 @@ export const eliminarHito = async (req, res) => {
   const { id } = req.params;
 
   try {
-    await prisma.hito.delete({ where: { id } });
+    await prisma.hito.delete({
+      where: { id: parseInt(id, 10) }
+    });
     res.status(204).send();
   } catch (error) {
     console.error("Error al eliminar el hito:", error);
     res.status(500).json({ error: "Error al eliminar el hito" });
   }
 };
- 

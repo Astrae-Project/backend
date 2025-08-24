@@ -4,11 +4,9 @@ const prisma = new PrismaClient();
 
 // Añadir usuario a la lista de espera
 export const addToWaitlist = async (req, res) => {
-  console.log('Datos recibidos:', req.body);
   const { correo, nombre, tipo_usuario } = req.body;
 
   if (!correo || !tipo_usuario) {
-    console.log('Faltan campos:', { correo, tipo_usuario });
     return res.status(400).json({ 
       message: 'El correo y el tipo de usuario son campos obligatorios',
       receivedData: req.body
@@ -18,7 +16,6 @@ export const addToWaitlist = async (req, res) => {
   // Convertir tipo_usuario a minúsculas y validar
   const tipoUsuarioNormalizado = tipo_usuario.toLowerCase();
   if (!['startup', 'investor'].includes(tipoUsuarioNormalizado)) {
-    console.log('Tipo de usuario inválido:', tipo_usuario);
     return res.status(400).json({ 
       message: 'Tipo de usuario no válido. Debe ser "startup" o "investor"',
       receivedType: tipo_usuario
@@ -32,7 +29,6 @@ export const addToWaitlist = async (req, res) => {
     });
 
     if (existingUser) {
-      console.log('Correo ya existe:', correo);
       return res.status(400).json({ 
         message: 'Este correo ya está registrado en la lista de espera' 
       });
@@ -47,7 +43,6 @@ export const addToWaitlist = async (req, res) => {
       }
     });
 
-    console.log('Usuario creado exitosamente:', newUser);
     return res.status(201).json({
       message: '¡Bienvenido a la revolución! Te mantendremos informado sobre el lanzamiento.',
       user: {

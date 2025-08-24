@@ -122,8 +122,6 @@ export const loginUser = async (req, res) => {
       return res.status(403).json({ message: 'Contraseña incorrecta' });
     }
 
-    console.log('Cookies being set...');
-
     const accessToken = generateAccessToken(user)
     const refreshToken = jwt.sign(
       { userId: user.id, role: user.rol },
@@ -146,10 +144,6 @@ export const loginUser = async (req, res) => {
       sameSite: 'Strict', // Protege contra ataques CSRF
       path: '/', // Establece el path adecuado para las cookies
     });
-
-    console.log('Access Token:', accessToken);
-    console.log('Refresh Token:', refreshToken);
-
 
     return res.status(200).json({ message: 'Inicio de sesión exitoso', accessToken });
   } catch (error) {
