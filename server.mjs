@@ -32,7 +32,7 @@ const server = createServer(app);
 // Configurar Socket.io
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_ORIGIN || ['https://landing-bdx7tncps-astraes-projects-b730cac9.vercel.app', 'http://localhost:3000'],
+    origin: process.env.FRONTEND_ORIGIN || ['https://landing-fu62u3718-astraes-projects-b730cac9.vercel.app', 'http://localhost:3000'],
     methods: ['GET', 'POST'],
     credentials: true
   }
