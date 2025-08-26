@@ -7,21 +7,26 @@ import stripe from '../lib/stripeClient.mjs';
 export const registerUser = async (req, res) => {
   const { email, password, username } = req.body;
 
+  console.log("Datos recibidos:", req.body);
+
   // Verificar si los campos requeridos están presentes
   if (!email || !password || !username) {
+    console.log("Faltan campos requeridos");
     return res.status(400).json({ message: 'Faltan campos requeridos' });
   }
 
   try {
     // Verificar si el usuario ya existe
     const existingUser = await prisma.usuario.findUnique({ where: { email } });
-    
+    console.log("Usuario existente:", existingUser);
+
     if (existingUser) {
       return res.status(400).json({ message: 'El usuario ya existe' });
     }
 
     // Hash de la contraseña
     const hashedPassword = await bcrypt.hash(password, 10);
+    console.log("Contraseña hasheada");
 
     // Crear el nuevo usuario en la base de datos
     const newUser = await prisma.usuario.create({
@@ -31,45 +36,60 @@ export const registerUser = async (req, res) => {
         username,
       },
     });
+    console.log("Usuario creado en DB:", newUser);
 
     const userId = newUser.id;
 
     // Crear una cuenta de Stripe para este usuario
-    const stripeAccount = await stripe.customers.create({
-      email: email,
-    });
+    let stripeAccount;
+    try {
+      stripeAccount = await stripe.customers.create({ email });
+      console.log("Cuenta Stripe creada:", stripeAccount);
+    } catch (stripeError) {
+      console.error("Error creando cuenta Stripe:", stripeError);
+      // No bloqueamos el registro, seguimos sin Stripe
+    }
 
-    // Asociar el ID del cliente de Stripe con el usuario
-    await prisma.usuario.update({
-      where: { id: userId },
-      data: {
-        stripeCustomerId: stripeAccount.id,
-      },
-    });
+    // Asociar el ID del cliente de Stripe con el usuario (si se creó)
+    if (stripeAccount) {
+      try {
+        await prisma.usuario.update({
+          where: { id: userId },
+          data: { stripeCustomerId: stripeAccount.id },
+        });
+        console.log("Usuario actualizado con stripeCustomerId");
+      } catch (updateError) {
+        console.error("Error actualizando usuario con stripeCustomerId:", updateError);
+      }
+    }
 
     // Crear contacto asociado
-    await prisma.contacto.create({
-      data: {
-        id_usuario: userId,
-        correo: email,
-      },
-    });
+    try {
+      await prisma.contacto.create({
+        data: { id_usuario: userId, correo: email },
+      });
+      console.log("Contacto creado");
+    } catch (contactError) {
+      console.error("Error creando contacto:", contactError);
+    }
 
-    // Generación de los tokens
+    // Generación de tokens
     try {
       const accessToken = jwt.sign(
         { userId },
         process.env.JWT_SECRET,
         { expiresIn: '1h' }
       );
+      console.log("Access token generado");
 
       const refreshToken = jwt.sign(
         { userId },
         process.env.JWT_REFRESH_SECRET,
         { expiresIn: '7d' }
       );
+      console.log("Refresh token generado");
 
-      // Configuración de las cookies
+      // Configuración de cookies
       res.cookie('token', accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -86,6 +106,8 @@ export const registerUser = async (req, res) => {
         path: '/',
       });
 
+      console.log("Cookies configuradas");
+
       // Respuesta exitosa
       res.status(201).json({ message: 'Usuario registrado con éxito' });
     } catch (tokenError) {
@@ -99,6 +121,7 @@ export const registerUser = async (req, res) => {
     res.status(500).json({ message: 'Error al registrar el usuario' });
   }
 };
+
 
 
 // Inicio de sesión
