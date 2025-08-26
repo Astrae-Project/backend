@@ -32,7 +32,7 @@ const server = createServer(app);
 // Configurar Socket.io
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_ORIGIN || ['http://localhost:4321', 'http://localhost:3000'],
+    origin: process.env.FRONTEND_ORIGIN || ['https://landing-bdx7tncps-astraes-projects-b730cac9.vercel.app', 'http://localhost:3000'],
     methods: ['GET', 'POST'],
     credentials: true
   }
@@ -55,7 +55,7 @@ const prisma = new PrismaClient();
 app.use(cors({
   origin: process.env.FRONTEND_ORIGIN 
     ? process.env.FRONTEND_ORIGIN.split(',') 
-    : ['http://localhost:4321', 'http://localhost:3000'],
+    : ['https://landing-bdx7tncps-astraes-projects-b730cac9.vercel.app', 'http://localhost:3000'],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true
 }));
@@ -93,11 +93,9 @@ const startServer = async () => {
   try {
     // Conectar a la base de datos
     await prisma.$connect();
-    console.log('Conectado a la base de datos');
 
     // Iniciar el servidor HTTP
     server.listen(port, () => {
-      console.log(`Servidor corriendo en http://localhost:${port}`);
     });
   } catch (err) {
     console.error('Error al conectar a la base de datos', err);
