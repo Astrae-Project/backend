@@ -16,8 +16,10 @@ import { PrismaClient } from '@prisma/client';
 import { verifyToken } from './middlewares/tokenMiddleware.mjs';
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
+import { checkStripeAccount } from './middlewares/checkedStripeMiddleware.mjs';
+import { requirePaymentMethod } from './middlewares/paymentMethodMiddleware.mjs';
 import path from 'path';
-import net from 'node:net';
+import { fileURLToPath } from 'url';
 
 // Configuración de variables de entorno
 dotenv.config();
@@ -89,27 +91,6 @@ app.use((err, req, res, next) => {
 // Iniciar el servidor
 const startServer = async () => {
   try {
-    // DEBUG TEMPORAL - pega logs y luego bórralo
-console.log('DEBUG: process.env.DATABASE_URL exists?', !!process.env.DATABASE_URL);
-console.log('DEBUG: DATABASE_URL startsWith postgres?', typeof process.env.DATABASE_URL === 'string' && process.env.DATABASE_URL.startsWith('postgres'));
-
-async function testTcp(host, port, timeout = 5000) {
-  return new Promise((resolve) => {
-    const s = net.createConnection({ host, port }, () => { s.end(); resolve(true); });
-    s.on('error', () => resolve(false));
-    s.setTimeout(timeout, () => { s.destroy(); resolve(false); });
-  });
-}
-
-const dbHost = 'db.rijlbnwtqprpwpnklcpw.supabase.co';
-const dbPort = 5432;
-const canConnect = await testTcp(dbHost, dbPort, 3000);
-console.log('DEBUG: TCP connect to', dbHost + ':' + dbPort, '=>', canConnect);
-
-if (!canConnect) {
-  console.error('DEBUG: TCP failed — likely network / firewall (Supabase bloqueando Render). Aborting startup.');
-  process.exit(1);
-}
     // Conectar a la base de datos
     await prisma.$connect();
     console.log('Conectado a la base de datos');
