@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 
-const SOCKET_SERVER_URL = "http://localhost:5000"; // Ajusta según corresponda
+const SOCKET_SERVER_URL = "https://backend-l3s8.onrender.com"; // Ajusta según corresponda
 
 const useSocket = (groupId) => {
   const [socket, setSocket] = useState(null);
