@@ -55,7 +55,7 @@ const prisma = new PrismaClient();
 app.use(cors({
   origin: process.env.FRONTEND_ORIGIN 
     ? process.env.FRONTEND_ORIGIN.split(',') 
-    : ['https://landing-bdx7tncps-astraes-projects-b730cac9.vercel.app', 'http://localhost:3000'],
+    : ['https://landing-fu62u3718-astraes-projects-b730cac9.vercel.app', 'http://localhost:3000'],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true
 }));
