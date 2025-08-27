@@ -32,7 +32,7 @@ const server = createServer(app);
 // Configurar Socket.io
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_ORIGIN || ['https://landing-fu62u3718-astraes-projects-b730cac9.vercel.app', 'http://localhost:3000'],
+    origin: process.env.FRONTEND_ORIGIN || ['https://www.astraesystem.com/', 'http://localhost:3000'],
     methods: ['GET', 'POST'],
     credentials: true
   }
@@ -55,7 +55,7 @@ const prisma = new PrismaClient();
 app.use(cors({
   origin: process.env.FRONTEND_ORIGIN 
     ? process.env.FRONTEND_ORIGIN.split(',') 
-    : ['https://landing-fu62u3718-astraes-projects-b730cac9.vercel.app', 'http://localhost:3000'],
+    : ['https://www.astraesystem.com/', 'http://localhost:3000'],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true
 }));

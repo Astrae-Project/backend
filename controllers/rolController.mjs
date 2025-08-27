@@ -196,7 +196,7 @@ export const startupRole = async (req, res) => {
       });
 
       // Respuesta exitosa
-      res.status(200).json({ message: 'Startup creada con éxito', redirectTo: 'http://localhost:3000/' });
+      res.status(200).json({ message: 'Startup creada con éxito', redirectTo: 'https://app.astraesystem.com/' });
     } catch (err) {
       return res.status(500).json({ message: 'Error al verificar el token', error: err.message });
     }
