@@ -1,3 +1,4 @@
+// server.mjs
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
@@ -16,58 +17,69 @@ import { PrismaClient } from '@prisma/client';
 import { verifyToken } from './middlewares/tokenMiddleware.mjs';
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
-import { checkStripeAccount } from './middlewares/checkedStripeMiddleware.mjs';
-import { requirePaymentMethod } from './middlewares/paymentMethodMiddleware.mjs';
-import path from 'path';
 import { fileURLToPath } from 'url';
+import path from 'path';
 
-// Configuración de variables de entorno
 dotenv.config();
-const port = process.env.PORT || 5000; 
 
-// Crear instancia de Express y servidor HTTP
+const PORT = process.env.PORT || 5000;
+
+// __dirname para ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Normalizar orígenes permitidos (sin barras finales)
+const allowedOrigins = (process.env.FRONTEND_ORIGIN
+  ? process.env.FRONTEND_ORIGIN.split(',')
+  : ['https://www.astraesystem.com', 'https://app.astraesystem.com']
+).map(s => s.trim().replace(/\/+$/, ''));
+
+// Opciones CORS (usadas por Express)
+const corsOptions = {
+  origin: (origin, callback) => {
+    // origin === undefined for non-browser requests (curl, server->server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+
 const app = express();
 const server = createServer(app);
 
-// Configurar Socket.io
+// Socket.io — usar la misma lista de orígenes normalizada
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_ORIGIN || ['https://www.astraesystem.com/', 'https://app.astraesystem.com/', 'https://frontend-3r6xme4z0-rauls-projects-12935bc5.vercel.app/'],
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
     credentials: true
   }
 });
 
 io.on('connection', (socket) => {
-  console.log('Usuario conectado', socket.id);
+  console.log('Socket conectado:', socket.id);
 
   socket.on('disconnect', () => {
-    console.log('Usuario desconectado', socket.id);
+    console.log('Socket desconectado:', socket.id);
   });
-
-  // Puedes agregar aquí otros eventos o lógica para Socket.io
 });
 
-// Crear instancia del cliente Prisma
-const prisma = new PrismaClient();
-
-// Middlewares generales
-app.use(cors({
-  origin: process.env.FRONTEND_ORIGIN 
-    ? process.env.FRONTEND_ORIGIN.split(',') 
-    : ['https://www.astraesystem.com/', 'https://app.astraesystem.com/', 'https://frontend-3r6xme4z0-rauls-projects-12935bc5.vercel.app/'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  credentials: true
-}));
+// Middlewares
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
-app.use('/uploads', express.static(path.resolve('uploads')));
 
-// Rutas sin protección (por ejemplo, autenticación)
+// Servir uploads (ruta absoluta)
+app.use('/uploads', express.static(path.resolve(__dirname, 'uploads')));
+
+// Rutas públicas
 app.use('/api/auth', authRoutes);
 app.use('/api/waitlist', waitlistRoutes);
 
-// Rutas protegidas por token: se recomienda aplicar primero el middleware de verificación
+// Rutas protegidas por token
 app.use('/api/invest', verifyToken, investRoutes);
 app.use('/api/search', verifyToken, searchingRoutes);
 app.use('/api/data', verifyToken, fetchingRoutes);
@@ -82,23 +94,27 @@ app.get('/', (req, res) => {
   res.send('Backend funcionando');
 });
 
-// Middleware global de manejo de errores (opcional pero recomendado)
+// Manejo de errores — incluido CORS personalizado
 app.use((err, req, res, next) => {
   console.error(err);
+  if (err && err.message === 'Not allowed by CORS') {
+    return res.status(403).json({ error: 'CORS: origen no permitido' });
+  }
   res.status(500).json({ error: 'Error interno del servidor' });
 });
 
-// Iniciar el servidor
+// Prisma y arranque del servidor
+const prisma = new PrismaClient();
+
 const startServer = async () => {
   try {
-    // Conectar a la base de datos
     await prisma.$connect();
-
-    // Iniciar el servidor HTTP
-    server.listen(port, () => {
+    server.listen(PORT, () => {
+      console.log(`Server listening on port ${PORT}`);
+      console.log('Allowed origins:', allowedOrigins);
     });
   } catch (err) {
-    console.error('Error al conectar a la base de datos', err);
+    console.error('Error al conectar a la base de datos:', err);
     process.exit(1);
   }
 };
