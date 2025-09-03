@@ -31,7 +31,7 @@ const __dirname = path.dirname(__filename);
 // Normalizar orígenes permitidos (sin barras finales)
 const allowedOrigins = (process.env.FRONTEND_ORIGIN
   ? process.env.FRONTEND_ORIGIN.split(',')
-  : ['https://www.astraesystem.com', 'https://app.astraesystem.com']
+  : ['https://www.astraesystem.com', 'https://app.astraesystem.com', 'http://localhost:4321', 'http://localhost:3000']
 ).map(s => s.trim().replace(/\/+$/, ''));
 
 // Opciones CORS (usadas por Express)
