@@ -26,29 +26,246 @@ export async function datosUsuario (req, res) {
                 include: {
                     usuario: {
                         select: {
+                            id: true,
                             username: true,
                             seguidores: true,
                             suscriptores: true,
-                            fecha_creacion: true,
                             avatar: true,
-                            pais: true,
+                            Contacto: true,
+                            fecha_creacion: true,
                             ciudad: true,
-                            id: true,
+                            pais: true,
+                            grupos: {
+                                include: {
+                                    grupo: true,
+                                },
+                            },
+
                         },
                     },
                     inversiones: {
                         include: {
-                            startup: true,
+                            startup: {
+                                include: {
+                                    usuario: {
+                                        select: {
+                                            username: true,
+                                            avatar: true,
+                                            seguidores: true,
+                                        },
+                                    },
+                                },
+                            },
                         },
                     },
                     portfolio: true,
-                    resenas: true
+                    resenas: true,
+                    portfolio_historico: true,
                 },
             });
 
             if (!inversor) {
                 return res.status(404).json({ message: 'Inversor no encontrado' });
             }
+
+            const eventosCreados = await prisma.evento.findMany({
+                where: {
+                    creador: { username: username },
+                },
+                orderBy: { fecha_evento: 'asc' },
+                select: {
+                    id: true,
+                    titulo: true,
+                    descripcion: true,
+                    fecha_evento: true,
+                    tipo: true,
+                    tipo_movimiento: true,
+                    creador: {
+                        select: {
+                            username: true,
+                            avatar: true,
+                        },
+                    },
+                },
+            });
+
+            const eventosParticipando = await prisma.evento.findMany({
+                where: {
+                    participantes: {
+                        some: {
+                          usuario: { username: username },
+                        },
+                    },
+                },
+                orderBy: { fecha_evento: 'asc' },
+                select: {
+                    id: true,
+                    titulo: true,
+                    descripcion: true,
+                    fecha_evento: true,
+                    tipo: true,
+                    tipo_movimiento: true,
+                    creador: {
+                        select: {
+                            username: true,
+                            avatar: true,
+                        },
+                    },
+                },
+            });
+
+            const eventos = [
+                ...eventosCreados.map(evento => ({ ...evento, esCreador: true, esParticipante: false })),
+                ...eventosParticipando.map(evento => ({ ...evento, esCreador: false, esParticipante: true })),
+            ];
+
+                    // Recuperar inversiones recientes con el usuario de la startup
+        const inversionesRecientes = await prisma.inversion.findMany({
+            where: { id_inversor: inversor.id },
+            orderBy: { fecha: 'desc' },
+            take: 10,
+            select: {
+                id: true,
+                monto_invertido: true,
+                porcentaje_adquirido: true,
+                fecha: true,
+                startup: {
+                    include: {
+                        usuario: {
+                            select: {
+                                username: true,
+                                avatar: true,
+                                seguidores: true,
+                            },
+                        },
+                     },
+                },
+            },
+        });
+
+        // Recuperar ofertas recientes con el usuario de la startup
+        const ofertasRecientes = await prisma.oferta.findMany({
+            where: { id_inversor: inversor.id },
+            orderBy: { fecha_creacion: 'desc' },
+            take: 10,
+            select: {
+                id: true,
+                monto_ofrecido: true,
+                porcentaje_ofrecido: true,
+                fecha_creacion: true,
+                estado: true,
+                startup: {
+                    include: {
+                        usuario: {
+                            select: {
+                                username: true,
+                                avatar: true,
+                                seguidores: true,
+                            },
+                        },
+                     },
+                },
+            },
+        });
+
+        // Recuperar eventos recientes creados por el usuario
+        const eventosCreadosRecientes = await prisma.evento.findMany({
+            where: { id_usuario: userId },
+            orderBy: { fecha_evento: 'desc' },
+            take: 10,
+            select: {
+                id: true,
+                titulo: true,
+                descripcion: true,
+                fecha_evento: true,
+                tipo: true,
+                fecha_creacion: true,
+                creador: {
+                    select: {
+                        username: true,
+                        avatar: true,
+                    },
+                },
+                participantes: {
+                    where: {
+                        id_usuario: userId,
+                    },
+                    select: {
+                        fecha_union: true,
+                        usuario: true,
+                    },
+                },
+            },
+        });
+
+        const eventosParticipadosRecientes = await prisma.evento.findMany({
+            where: {
+                participantes: {
+                    some: {
+                        id_usuario: userId,
+                    },
+                },
+                id_usuario: {
+                    not: userId, // Excluir eventos creados por el usuario
+                },
+            },
+            orderBy: { fecha_evento: 'desc' },
+            take: 10,
+            select: {
+                id: true,
+                titulo: true,
+                descripcion: true,
+                fecha_evento: true,
+                tipo: true,
+                creador: {
+                    select: {
+                        username: true,
+                        avatar: true,
+                    },
+                },
+                participantes: {
+                    where: {
+                        id_usuario: userId,
+                    },
+                    select: {
+                        fecha_union: true,
+                        usuario: true,
+                    },
+                },
+            },
+        });
+        
+        // Combinar todos los movimientos en un solo array
+        const movimientos = [
+            ...inversionesRecientes.map(m => ({
+                ...m,
+                tipo_movimiento: 'inversion',
+                avatar: m.startup.usuario.avatar,
+            })),
+            ...ofertasRecientes.map(m => ({
+                ...m,
+                tipo_movimiento: 'oferta',
+                avatar: m.startup.usuario.avatar,
+            })),
+            ...eventosCreadosRecientes.map(m => ({
+                ...m,
+                tipo_movimiento: 'evento',
+                avatar: m.creador.avatar,
+            })),
+            ...eventosParticipadosRecientes.map(m => ({
+                ...m,
+                tipo_movimiento: 'evento',
+                avatar: m.creador.avatar,
+            })),
+        ];
+
+        // Ordenar los movimientos por fecha (más reciente primero)
+        const movimientosOrdenados = movimientos.sort((a, b) => {
+            return new Date(b.fecha || b.fecha_creacion || b.fecha_evento) - new Date(a.fecha || a.fecha_creacion || a.fecha_evento);
+        });
+
+        // Tomar los últimos 10 movimientos
+        const ultimosMovimientos = movimientosOrdenados.slice(0, 15);
 
             // Calcular el sector favorito
             const sectores = inversor.inversiones.reduce((acc, inv) => {
@@ -103,7 +320,11 @@ export async function datosUsuario (req, res) {
                 inversionesRealizadas: inversor.inversiones.length,
                 roiPromedio: roiPromedio.toFixed(2),
                 puntuacionMedia: puntuacionMedia.toFixed(2),
-                sectorFavorito: sectorFavorito
+                sectorFavorito: sectorFavorito,
+                eventos,
+                ultimosMovimientos,
+                grupos: inversor.usuario.grupos,
+                contacto: inversor.usuario.Contacto,
             });
 
         } else if (role === 'startup') {
@@ -113,21 +334,24 @@ export async function datosUsuario (req, res) {
                 include: {
                     usuario: {
                         select: {
+                            id: true,
                             seguidores: true,
                             username: true,
+                            Contacto: true,
                             fecha_creacion: true,
-                            id: true,
-                            avatar: true,
-                            pais: true,
                             ciudad: true,
+                            pais: true,
+                            avatar: true,
+                            grupos: {
+                                include: {
+                                    grupo: true,
+                                }, 
+                            }
                         },
                     },
-                    inversiones: {
-                        include: {
-                            inversor: true,
-                        },
-                    },
-                    hitos: { orderBy: { fechaObjetivo: 'asc' } },
+                    inversiones: true,
+                    valoracion_historica: true,
+                    hitos: {orderBy: { fechaObjetivo: 'asc' }},
                 },
             });
 
@@ -139,11 +363,65 @@ export async function datosUsuario (req, res) {
                 return total + parseFloat(inversion.monto_invertido);
             }, 0);
 
-            res.json({
+            const eventosCreados = await prisma.evento.findMany({
+                where: {
+                    creador: { username: username },
+                },
+                orderBy: { fecha_evento: 'asc' },
+                select: {
+                    id: true,
+                    titulo: true,
+                    descripcion: true,
+                    fecha_evento: true,
+                    tipo: true,
+                    tipo_movimiento: true,
+                    creador: {
+                        select: {
+                            username: true,
+                            avatar: true,
+                        },
+                    },
+                },
+            });
+
+            const eventosParticipando = await prisma.evento.findMany({
+                where: {
+                    participantes: {
+                        some: {
+                          usuario: { username: username },
+                        },
+                    },
+                },
+                orderBy: { fecha_evento: 'asc' },
+                select: {
+                    id: true,
+                    titulo: true,
+                    descripcion: true,
+                    fecha_evento: true,
+                    tipo: true,
+                    tipo_movimiento: true,
+                    creador: {
+                        select: {
+                            username: true,
+                            avatar: true,
+                        },
+                    },
+                },
+            });
+
+            const eventos = [
+                ...eventosCreados.map(evento => ({ ...evento, esCreador: true, esParticipante: false })),
+                ...eventosParticipando.map(evento => ({ ...evento, esCreador: false, esParticipante: true })),
+            ];
+
+            return res.json({
                 startup,
+                eventos,
                 seguidores: startup.usuario.seguidores.length,
                 inversores: startup.inversiones.length,
                 recaudacionTotal,
+                contacto: startup.usuario.Contacto,
+                grupos: startup.usuario.grupos,
             });
         } else {
             return res.status(403).json({ message: 'Rol no válido' });
