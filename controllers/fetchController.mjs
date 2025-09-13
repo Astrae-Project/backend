@@ -365,7 +365,7 @@ export async function datosUsuario (req, res) {
 
             const eventosCreados = await prisma.evento.findMany({
                 where: {
-                    creador: { username: username },
+                    id_usuario: userId,
                 },
                 orderBy: { fecha_evento: 'asc' },
                 select: {
@@ -388,7 +388,7 @@ export async function datosUsuario (req, res) {
                 where: {
                     participantes: {
                         some: {
-                          usuario: { username: username },
+                          id_usuario: userId,
                         },
                     },
                 },
