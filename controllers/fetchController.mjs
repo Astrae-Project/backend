@@ -890,30 +890,40 @@ export async function usuarioEspecifico(req, res) {
     }
 }
 
-export async function todosUsuarios (req, res) {
-    try {
-        // Obtener startups aleatorias
-        const usuarios = await prisma.usuario.findMany({
-            orderBy: {
-                id: 'desc',
-            },
-            include: {
-                inversores: true,
-                startups: true,
-                Contacto: true,
-            },
-        });
+export async function todosUsuarios(req, res) {
+  try {
+    const token = req.cookies.token;
+    if (!token) return res.status(401).json({ message: 'Token no proporcionado' });
 
-        if (!usuarios || usuarios.length === 0) {
-            return res.status(404).json({ message: 'No se encontraron usuarios' });
-        }
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decodedToken.userId;
+    if (!userId) return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
 
-        res.json({ usuarios });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error al recuperar las usuarios' });
+    const usuarios = await prisma.usuario.findMany({
+      where: {
+        id: { not: userId }, // Excluir al usuario propio
+      },
+      orderBy: {
+        id: 'desc',
+      },
+      include: {
+        inversores: true,
+        startups: true,
+        Contacto: true,
+      },
+    });
+
+    if (!usuarios || usuarios.length === 0) {
+      return res.status(404).json({ message: 'No se encontraron usuarios' });
     }
+
+    res.json({ usuarios });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error al recuperar los usuarios' });
+  }
 };
+
 
 export async function todasStartups (req, res) {
     try {
