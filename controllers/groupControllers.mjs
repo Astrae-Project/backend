@@ -185,19 +185,32 @@ export const dropGroup = async (req, res) => {
       return res.status(403).json({ message: 'No estás en este grupo' });
     }
 
-    // Verificar si el usuario es el único administrador del grupo
     const administradores = await prisma.grupoUsuario.findMany({
       where: {
         id_grupo: parsedGroupId,
-        rol: 'administrador', // Asumiendo que el campo 'rol' indica si es administrador
+        rol: 'administrador',
       },
     });
 
-    if (administradores.length === 1 && administradores[0].id_usuario === userId) {
+    const esUnicoAdmin = administradores.length === 1 && administradores[0].id_usuario === userId;
+    const esUnicoMiembro = grupo.usuarios.length === 1 && grupo.usuarios[0].id_usuario === userId;
+
+    if (esUnicoAdmin && esUnicoMiembro) {
+      // Si es el único admin y único miembro => eliminar el grupo entero
+      await prisma.grupo.delete({
+        where: { id: parsedGroupId },
+      });
+
+      return res.status(200).json({ message: 'Has salido del grupo con éxito' });
+    }
+
+    if (esUnicoAdmin) {
+      // Bloquear salir si es único admin pero hay más miembros
       return res.status(403).json({
-        message: 'Eres el único administrador. Debes asignar otro administrador antes de salir.',
+        message: 'Eres el único administrador. Debes asignar otro administrador antes de salir',
       });
     }
+
 
     // Eliminar la relación del usuario con el grupo
     await prisma.grupoUsuario.delete({
