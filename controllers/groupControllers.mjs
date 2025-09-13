@@ -185,6 +185,10 @@ export const dropGroup = async (req, res) => {
       return res.status(403).json({ message: 'No estás en este grupo' });
     }
 
+    const usuariosGrupo = await prisma.grupoUsuario.findMany({
+      where: { id_grupo: parsedGroupId },
+    });
+
     const administradores = await prisma.grupoUsuario.findMany({
       where: {
         id_grupo: parsedGroupId,
@@ -193,7 +197,7 @@ export const dropGroup = async (req, res) => {
     });
 
     const esUnicoAdmin = administradores.length === 1 && administradores[0].id_usuario === userId;
-    const esUnicoMiembro = grupo.usuarios.length === 1 && grupo.usuarios[0].id_usuario === userId;
+    const esUnicoMiembro = usuariosGrupo.length === 1 && usuariosGrupo[0].id_usuario === userId;
 
     if (esUnicoAdmin && esUnicoMiembro) {
       // Si es el único admin y único miembro => eliminar el grupo entero
