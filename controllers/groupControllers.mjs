@@ -140,38 +140,24 @@ export const joinGroup = async (req, res) => {
 export const dropGroup = async (req, res) => {
   try {
     const token = req.cookies.token;
-
-    if (!token) {
-      return res.status(401).json({ message: 'Token no proporcionado' });
-    }
+    if (!token) return res.status(401).json({ message: 'Token no proporcionado' });
 
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decodedToken.userId;
-
-    if (!userId) {
-      return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
-    }
+    if (!userId) return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
 
     const { groupId } = req.params;
     const parsedGroupId = parseInt(groupId, 10);
+    if (isNaN(parsedGroupId)) return res.status(400).json({ message: 'ID de grupo inválido' });
 
-    if (isNaN(parsedGroupId)) {
-      return res.status(400).json({ message: 'ID de grupo inválido' });
-    }
-
-    // Verificar si el grupo existe
+    // Buscar grupo y miembros
     const grupo = await prisma.grupo.findUnique({
       where: { id: parsedGroupId },
-      include: {
-        usuarios: true, // Obtener todos los miembros del grupo
-      },
+      include: { usuarios: true },
     });
+    if (!grupo) return res.status(404).json({ message: 'Grupo no encontrado' });
 
-    if (!grupo) {
-      return res.status(404).json({ message: 'Grupo no encontrado' });
-    }
-
-    // Verificar si el usuario está en el grupo
+    // Verificar si el usuario pertenece al grupo
     const relacion = await prisma.grupoUsuario.findUnique({
       where: {
         id_grupo_id_usuario: {
@@ -180,50 +166,31 @@ export const dropGroup = async (req, res) => {
         },
       },
     });
+    if (!relacion) return res.status(403).json({ message: 'No estás en este grupo' });
 
-    if (!relacion) {
-      return res.status(403).json({ message: 'No estás en este grupo' });
-    }
-
-    const usuariosGrupo = await prisma.grupoUsuario.findMany({
-      where: { id_grupo: parsedGroupId },
-    });
-
-    const administradores = await prisma.grupoUsuario.findMany({
-      where: {
-        id_grupo: parsedGroupId,
-        rol: 'administrador',
-      },
-    });
+    const usuariosGrupo = grupo.usuarios;
+    const administradores = usuariosGrupo.filter(u => u.rol === 'administrador');
 
     const esUnicoAdmin = administradores.length === 1 && administradores[0].id_usuario === userId;
     const esUnicoMiembro = usuariosGrupo.length === 1 && usuariosGrupo[0].id_usuario === userId;
 
     if (esUnicoAdmin && esUnicoMiembro) {
-      // Si es el único admin y único miembro => eliminar el grupo entero
-      await prisma.grupo.delete({
-        where: { id: parsedGroupId },
-      });
-
+      // Si es el único admin y único miembro => eliminar relaciones y grupo
+      await prisma.grupoUsuario.deleteMany({ where: { id_grupo: parsedGroupId } });
+      await prisma.grupo.delete({ where: { id: parsedGroupId } });
       return res.status(200).json({ message: 'Has salido del grupo con éxito' });
     }
 
     if (esUnicoAdmin) {
-      // Bloquear salir si es único admin pero hay más miembros
+      // Bloquear salida si es único admin y hay otros miembros
       return res.status(403).json({
         message: 'Eres el único administrador. Debes asignar otro administrador antes de salir',
       });
     }
 
-
-    // Eliminar la relación del usuario con el grupo
+    // Caso normal: eliminar solo la relación del usuario
     await prisma.grupoUsuario.delete({
-      where: {
-        id_grupo_id_usuario: {
-          id_grupo: parsedGroupId,
-          id_usuario: userId,
-        },
-      },
+      where: { id_grupo_id_usuario: { id_grupo: parsedGroupId, id_usuario: userId } },
     });
 
     res.status(200).json({ message: 'Has salido del grupo con éxito' });
@@ -232,7 +199,6 @@ export const dropGroup = async (req, res) => {
     res.status(500).json({ message: 'Error al salir del grupo' });
   }
 };
-
 
 export const dataGroup = async (req, res) => {
   try {
