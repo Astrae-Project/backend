@@ -195,7 +195,6 @@ export const dropGroup = async (req, res) => {
 
     res.status(200).json({ message: 'Has salido del grupo con éxito' });
   } catch (error) {
-    console.error('Error al salir del grupo:', error);
     res.status(500).json({ message: 'Error al salir del grupo' });
   }
 };
