@@ -4,56 +4,50 @@ import path from 'path';
 import fs from 'fs';
 
 export async function saveContact(req, res) {
-    const { correo, twitter, linkedin, facebook, instagram, otros } = req.body;
-    const token = req.cookies.token;
+  const { correo, twitter, linkedin, facebook, instagram, otros } = req.body;
+  const token = req.cookies.token;
 
-    // Verificar si el token está presente
-    if (!token) {
-        return res.status(401).json({ message: 'Token no proporcionado' });
+  if (!token) {
+    return res.status(401).json({ message: 'Token no proporcionado' });
+  }
+
+  try {
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decodedToken?.userId;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
     }
 
-    try {
-        // Verificar y decodificar el token JWT
-        const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-        const userId = decodedToken?.userId;
+    const contactoExistente = await prisma.contacto.findUnique({
+      where: { id_usuario: userId },
+    });
 
-        if (!userId) {
-            return res.status(400).json({ message: 'ID de usuario no encontrado en el token' });
-        }
-
-        // Validar que al menos un campo se envió para actualizar
-        if (![correo, twitter, linkedin, facebook, instagram, otros].some(field => field !== undefined)) {
-            return res.status(400).json({ message: 'Debe proporcionar al menos un campo para actualizar' });
-        }
-
-        // Buscar el contacto existente en la base de datos
-        const contactoExistente = await prisma.contacto.findUnique({
-            where: { id_usuario: userId },
-        });
-
-        if (!contactoExistente) {
-            return res.status(404).json({ message: 'No se encontró el registro para actualizar' });
-        }
-
-        // Actualizar los datos preservando valores existentes si no se envían
-        const contactoActualizado = await prisma.contacto.update({
-            where: { id_usuario: userId },
-            data: {
-                correo: correo !== undefined ? correo : contactoExistente.correo,
-                twitter: twitter !== undefined ? twitter : contactoExistente.twitter,
-                linkedin: linkedin !== undefined ? linkedin : contactoExistente.linkedin,
-                facebook: facebook !== undefined ? facebook : contactoExistente.facebook,
-                instagram: instagram !== undefined ? instagram : contactoExistente.instagram,
-                otros: otros !== undefined ? otros : contactoExistente.otros,    
-            },
-        });
-
-        // Responder con los datos actualizados
-        res.status(200).json({ message: 'Contacto actualizado con éxito', data: contactoActualizado });
-    } catch (error) {
-        console.error('Error al actualizar la información de contacto:', error);
-        res.status(500).json({ message: 'Error interno del servidor' });
+    if (!contactoExistente) {
+      return res.status(404).json({ message: 'No se encontró el registro para actualizar' });
     }
+
+    // Solo incluir los campos que vengan en la request y tengan valor
+    const dataToUpdate = {};
+
+    if (correo !== undefined) dataToUpdate.correo = correo;
+    if (twitter !== undefined) dataToUpdate.twitter = twitter;
+    if (linkedin !== undefined) dataToUpdate.linkedin = linkedin;
+    if (facebook !== undefined) dataToUpdate.facebook = facebook;
+    if (instagram !== undefined) dataToUpdate.instagram = instagram;
+    if (otros !== undefined) dataToUpdate.otros = otros;
+
+    // Luego
+    const contactoActualizado = await prisma.contacto.update({
+      where: { id_usuario: userId },
+      data: dataToUpdate,
+    });
+
+    res.status(200).json({ message: 'Contacto actualizado con éxito', data: contactoActualizado });
+  } catch (error) {
+    console.error('Error al actualizar la información de contacto:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
 }
 
 export const changeData = async (req, res) => {
