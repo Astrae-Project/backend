@@ -34,12 +34,12 @@ export const offer = async (req, res) => {
 
   const { userId } = jwt.verify(token, process.env.JWT_SECRET);
   const usuario = await prisma.usuario.findUnique({ where: { id: userId } });
-  if (!usuario.payment_method_id) {
+  /*if (!usuario.payment_method_id) {
     return res.status(402).json({
       message: 'Debes registrar un método de pago antes de invertir.',
       redirect: '/ajustes',
     });
-  }
+  }*/
 
   const inversor = await prisma.inversor.findFirst({ where: { id_usuario: userId } });
   const startup = await prisma.startup.findUnique({ where: { id: id_startup } });
