@@ -20,12 +20,12 @@ export const offer = async (req, res) => {
     id_startup,
     monto_ofrecido,
     porcentaje_ofrecido,
-    paymentMethodId,
+    /*paymentMethodId,*/
     termsAccepted,
   } = req.body;
 
   if (!token) return res.status(401).json({ message: 'Token no proporcionado' });
-  if (!id_startup || !monto_ofrecido || !porcentaje_ofrecido || !paymentMethodId) {
+  if (!id_startup || !monto_ofrecido || !porcentaje_ofrecido /*|| !paymentMethodId*/) {
     return res.status(400).json({ message: 'Faltan campos requeridos' });
   }
   if (!termsAccepted) {
