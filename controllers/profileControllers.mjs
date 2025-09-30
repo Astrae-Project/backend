@@ -257,10 +257,9 @@ export async function darPuntuacion(req, res) {
 
         await prisma.notificacion.create({
             data: {
-                id_usuario: id_inversor,
+                id_usuario: inversor.id_usuario,
                 tipo: 'reseña',
                 contenido: `Has recibido una reseña de la startup ${startup.nombre}`,
-                leido: false,
             },
         });
 
