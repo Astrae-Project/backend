@@ -191,7 +191,7 @@ export const changeData = async (req, res) => {
 };
 
 export async function darPuntuacion(req, res) {
-    const { id_inversor, id_startup, puntuacion, comentario } = req.body;
+    const { id_inversor, puntuacion, comentario } = req.body;
     const token = req.cookies.token;
 
     // Verificar si el token está presente
@@ -199,8 +199,8 @@ export async function darPuntuacion(req, res) {
         return res.status(401).json({ message: 'Token no proporcionado' });
     }
 
-    // Verificar que el id_inversor y puntuacion estén presentes
-    if (!id_inversor || !id_startup || puntuacion === undefined) {
+    // Verificar que el id_inversor y puntuacion estén presentes, id_startup se obtendrá del token
+    if (!id_inversor || puntuacion === undefined) {
         return res.status(400).json({ error: "El id_inversor y la puntuación son obligatorios" });
     }
 
@@ -212,7 +212,7 @@ export async function darPuntuacion(req, res) {
 
     try {
         const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-        const userId = decodedToken.userId; // ID de la startup
+        const userId = decodedToken.userId; // ID del usuario que es una startup
         const role = decodedToken.role;
 
         // Verificar que el ID de usuario se haya decodificado correctamente
@@ -234,11 +234,11 @@ export async function darPuntuacion(req, res) {
         }
 
         // Verificar que la startup existe
-        const startup = await prisma.startup.findMany({
-            where: { id_usuario: userId }, // Asegúrate de que 'id_usuario' es el campo correcto
+        const startup = await prisma.startup.findUnique({
+            where: { id_usuario: userId },
         });
         if (!startup) {
-            return res.status(404).json({ error: "Startup no encontrada" });
+            return res.status(404).json({ error: "No se encontró la startup asociada al usuario del token" });
         }
 
         // Crear la reseña, asociándola tanto a la startup como al inversor
@@ -250,7 +250,7 @@ export async function darPuntuacion(req, res) {
                     connect: { id: id_inversor }, // Conectar la reseña con el inversor
                 },
                 startup: {
-                    connect: { id: id_startup }, // Conectar la reseña con la startup usando id directamente
+                    connect: { id: startup.id }, // Conectar la reseña con la startup obtenida del token
                 },
             },
         });
@@ -259,7 +259,7 @@ export async function darPuntuacion(req, res) {
             data: {
                 id_usuario: id_inversor,
                 tipo: 'reseña',
-                descripcion: `Has recibido una reseña de la startup ${startup[0].nombre}`,
+                contenido: `Has recibido una reseña de la startup ${startup.nombre}`,
                 leido: false,
             },
         });

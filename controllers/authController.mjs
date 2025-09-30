@@ -87,7 +87,6 @@ export const registerUser = async (req, res) => {
         process.env.JWT_REFRESH_SECRET,
         { expiresIn: '7d' }
       );
-      console.log("Refresh token generado");
 
       // Configuración de cookies
       res.cookie('token', accessToken, {
@@ -105,8 +104,6 @@ export const registerUser = async (req, res) => {
         sameSite: 'Strict',
         path: '/',
       });
-
-      console.log("Cookies configuradas");
 
       // Respuesta exitosa
       res.status(201).json({ message: 'Usuario registrado con éxito' });
