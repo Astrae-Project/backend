@@ -1,4 +1,6 @@
 // server.mjs
+import '../hooks/instrument.mjs';
+import * as Sentry from "@sentry/node";
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
@@ -37,7 +39,6 @@ const allowedOrigins = (process.env.FRONTEND_ORIGIN
 // Opciones CORS (usadas por Express)
 const corsOptions = {
   origin: (origin, callback) => {
-    // origin === undefined for non-browser requests (curl, server->server)
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
     return callback(new Error('Not allowed by CORS'));
@@ -67,7 +68,8 @@ io.on('connection', (socket) => {
   });
 });
 
-// Middlewares
+// Middlewares globales
+app.use(Sentry.Handlers.requestHandler()); // <--- Sentry requestHandler antes de rutas
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
@@ -89,18 +91,29 @@ app.use('/api/evento', verifyToken, eventRoutes);
 app.use('/api/follow', verifyToken, followRoutes);
 app.use('/api/stripe', verifyToken, stripeRoutes);
 
+
+app.get("/debug-sentry", function mainHandler(req, res) {
+  throw new Error("My first Sentry error!");
+});
+
 // Ruta principal
 app.get('/', (req, res) => {
   res.send('Backend funcionando');
 });
 
-// Manejo de errores — incluido CORS personalizado
+// Sentry errorHandler — después de todas las rutas
+app.use(Sentry.Handlers.errorHandler());
+
+// Middleware final de errores JSON personalizado (opcional)
 app.use((err, req, res, next) => {
   console.error(err);
   if (err && err.message === 'Not allowed by CORS') {
     return res.status(403).json({ error: 'CORS: origen no permitido' });
   }
-  res.status(500).json({ error: 'Error interno del servidor' });
+  res.status(500).json({
+    error: err.message || 'Error interno del servidor',
+    eventId: res.sentry, // ID Sentry para tracking
+  });
 });
 
 // Prisma y arranque del servidor
