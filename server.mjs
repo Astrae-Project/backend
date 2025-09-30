@@ -100,9 +100,8 @@ app.use('/api/evento', verifyToken, eventRoutes);
 app.use('/api/follow', verifyToken, followRoutes);
 app.use('/api/stripe', verifyToken, stripeRoutes);
 
-// Debug route para verificar Sentry
-app.get("/debug-sentry", function mainHandler(req, res) {
-  Sentry.captureException(new Error("My first Sentry error!"));
+app.get("/debug-sentry", (req, res) => {
+  Sentry.captureException(new Error("Test Sentry desde /debug-sentry"));
   res.send("Error enviado a Sentry");
 });
 
