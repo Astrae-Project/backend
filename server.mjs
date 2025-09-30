@@ -69,10 +69,19 @@ io.on('connection', (socket) => {
 });
 
 // Middlewares globales
-app.use(Sentry.Handlers.requestHandler()); // <-- Sentry requestHandler antes de las rutas
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
+
+// Middleware para capturar errores en requests
+app.use((req, res, next) => {
+  try {
+    next();
+  } catch (err) {
+    Sentry.captureException(err);
+    next(err);
+  }
+});
 
 // Servir uploads (ruta absoluta)
 app.use('/uploads', express.static(path.resolve(__dirname, 'uploads')));
@@ -93,7 +102,8 @@ app.use('/api/stripe', verifyToken, stripeRoutes);
 
 // Debug route para verificar Sentry
 app.get("/debug-sentry", function mainHandler(req, res) {
-  throw new Error("My first Sentry error!");
+  Sentry.captureException(new Error("My first Sentry error!"));
+  res.send("Error enviado a Sentry");
 });
 
 // Ruta principal
@@ -101,18 +111,16 @@ app.get('/', (req, res) => {
   res.send('Backend funcionando');
 });
 
-// Sentry errorHandler — después de todas las rutas
-app.use(Sentry.Handlers.errorHandler());
-
-// Middleware final de errores JSON personalizado (opcional)
+// Middleware final de errores JSON personalizado
 app.use((err, req, res, next) => {
   console.error(err);
   if (err && err.message === 'Not allowed by CORS') {
     return res.status(403).json({ error: 'CORS: origen no permitido' });
   }
+  Sentry.captureException(err); // enviar cualquier error a Sentry
   res.status(500).json({
     error: err.message || 'Error interno del servidor',
-    eventId: res.sentry, // ID Sentry para tracking
+    eventId: err.eventId || undefined,
   });
 });
 
@@ -128,6 +136,7 @@ const startServer = async () => {
     });
   } catch (err) {
     console.error('Error al conectar a la base de datos:', err);
+    Sentry.captureException(err);
     process.exit(1);
   }
 };
