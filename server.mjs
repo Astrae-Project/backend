@@ -1,6 +1,6 @@
 // server.mjs
 import './hooks/instrument.mjs'; // Inicializar Sentry lo antes posible
-import Sentry from "@sentry/node"
+import * as Sentry from "@sentry/node"; // Import ESM como indica la doc oficial
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
@@ -69,7 +69,7 @@ io.on('connection', (socket) => {
 });
 
 // Middlewares globales
-app.use(Sentry.Handlers.requestHandler()); // <--- Sentry requestHandler antes de rutas
+app.use(Sentry.Handlers.requestHandler()); // <-- Sentry requestHandler antes de las rutas
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
@@ -91,7 +91,7 @@ app.use('/api/evento', verifyToken, eventRoutes);
 app.use('/api/follow', verifyToken, followRoutes);
 app.use('/api/stripe', verifyToken, stripeRoutes);
 
-
+// Debug route para verificar Sentry
 app.get("/debug-sentry", function mainHandler(req, res) {
   throw new Error("My first Sentry error!");
 });
