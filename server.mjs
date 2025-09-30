@@ -1,5 +1,5 @@
 // server.mjs
-import '../hooks/instrument.mjs';
+import './hooks/instrument.mjs'; // Inicializar Sentry lo antes posible
 import * as Sentry from "@sentry/node";
 import express from 'express';
 import dotenv from 'dotenv';
